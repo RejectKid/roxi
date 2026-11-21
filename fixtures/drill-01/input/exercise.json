@@ -1,0 +1,27 @@
+{
+  "exercise_id": "drill-01",
+  "name": "West Annex dock flow drill",
+  "glossary_file": "glossary.json",
+  "sources": [
+    {
+      "source_key": "facilities",
+      "kind": "audio",
+      "file": "facilities-radio.wav",
+      "transcript_file": "facilities-radio.vtt",
+      "exercise_offset_ms": 0
+    },
+    {
+      "source_key": "secondary-radio",
+      "kind": "audio",
+      "file": "unaligned-radio.wav",
+      "transcript_file": "unaligned-radio.vtt",
+      "exercise_offset_ms": null
+    },
+    {
+      "source_key": "dispatch",
+      "kind": "chat",
+      "file": "dispatch.irc",
+      "time_basis": "exercise_elapsed"
+    }
+  ]
+}

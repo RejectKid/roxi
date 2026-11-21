@@ -1,0 +1,71 @@
+{
+  "subjects": [
+    {
+      "subject_id": "bay-1",
+      "label": "Bay 1",
+      "aliases": [
+        "Bay one",
+        "Dock bay 1"
+      ]
+    },
+    {
+      "subject_id": "bay-2",
+      "label": "Bay 2",
+      "aliases": [
+        "Bay two",
+        "Dock bay 2"
+      ]
+    },
+    {
+      "subject_id": "bay-3",
+      "label": "Bay 3",
+      "aliases": [
+        "Bay three",
+        "Dock bay 3"
+      ]
+    },
+    {
+      "subject_id": "cart-c14",
+      "label": "Cart C-14",
+      "aliases": [
+        "C-14",
+        "C fourteen"
+      ]
+    },
+    {
+      "subject_id": "cart-c17",
+      "label": "Cart C-17",
+      "aliases": [
+        "C-17",
+        "C seventeen"
+      ]
+    },
+    {
+      "subject_id": "lift-l7",
+      "label": "Lift L-7",
+      "aliases": [
+        "L-7",
+        "L seven"
+      ]
+    },
+    {
+      "subject_id": "returns-cage-1",
+      "label": "Returns Cage 1",
+      "aliases": [
+        "Returns Cage one",
+        "Cage 1",
+        "Cage one"
+      ]
+    }
+  ],
+  "terms": [
+    {
+      "literal": "OOS",
+      "expanded": "out of service"
+    },
+    {
+      "literal": "Copy",
+      "expanded": "acknowledgment of receipt"
+    }
+  ]
+}

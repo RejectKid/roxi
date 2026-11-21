@@ -1,0 +1,273 @@
+{
+  "exercise_id": "drill-01",
+  "exercise_duration_ms": 900000,
+  "evidence": {
+    "facilities-F06": {
+      "source_key": "facilities",
+      "kind": "audio_interval",
+      "file": "facilities-radio.wav",
+      "transcript_file": "facilities-radio.vtt",
+      "cue_id": "F06",
+      "start_ms": 124000,
+      "end_ms": 126600,
+      "exercise_start_ms": 124000,
+      "speaker": "Facilities",
+      "quote": "Bay three is OOS."
+    },
+    "facilities-F14": {
+      "source_key": "facilities",
+      "kind": "audio_interval",
+      "file": "facilities-radio.wav",
+      "transcript_file": "facilities-radio.vtt",
+      "cue_id": "F14",
+      "start_ms": 455000,
+      "end_ms": 458650,
+      "exercise_start_ms": 455000,
+      "speaker": "Facilities",
+      "quote": "Returns Cage one is open for returns."
+    },
+    "facilities-F18": {
+      "source_key": "facilities",
+      "kind": "audio_interval",
+      "file": "facilities-radio.wav",
+      "transcript_file": "facilities-radio.vtt",
+      "cue_id": "F18",
+      "start_ms": 642000,
+      "end_ms": 647150,
+      "exercise_start_ms": 642000,
+      "speaker": "Yard",
+      "quote": "Dispatch, Yard. Cart C-17 is staged beside Bay one."
+    },
+    "secondary-radio-U02": {
+      "source_key": "secondary-radio",
+      "kind": "audio_interval",
+      "file": "unaligned-radio.wav",
+      "transcript_file": "unaligned-radio.vtt",
+      "cue_id": "U02",
+      "start_ms": 15000,
+      "end_ms": 18750,
+      "exercise_start_ms": null,
+      "speaker": "Maintenance",
+      "quote": "Bay two is back in service following the latch check."
+    },
+    "chat-07": {
+      "source_key": "dispatch",
+      "kind": "chat_lines",
+      "file": "dispatch.irc",
+      "line_start": 7,
+      "line_end": 7,
+      "exercise_start_ms": 149000,
+      "speaker": "facilities",
+      "quote": "Correction, Bay 2 is OOS."
+    },
+    "chat-08": {
+      "source_key": "dispatch",
+      "kind": "chat_lines",
+      "file": "dispatch.irc",
+      "line_start": 8,
+      "line_end": 8,
+      "exercise_start_ms": 160000,
+      "speaker": "dispatch",
+      "quote": "Copy, Bay 2 OOS."
+    },
+    "chat-14": {
+      "source_key": "dispatch",
+      "kind": "chat_lines",
+      "file": "dispatch.irc",
+      "line_start": 14,
+      "line_end": 14,
+      "exercise_start_ms": 340000,
+      "speaker": "yard",
+      "quote": "Cart C-14 is OOS. Tag is on the handle."
+    },
+    "chat-15": {
+      "source_key": "dispatch",
+      "kind": "chat_lines",
+      "file": "dispatch.irc",
+      "line_start": 15,
+      "line_end": 15,
+      "exercise_start_ms": 340000,
+      "speaker": "maintenance",
+      "quote": "Lift L-7 is back in service."
+    },
+    "chat-16": {
+      "source_key": "dispatch",
+      "kind": "chat_lines",
+      "file": "dispatch.irc",
+      "line_start": 16,
+      "line_end": 16,
+      "exercise_start_ms": 348000,
+      "speaker": "dispatch",
+      "quote": "Copy."
+    },
+    "chat-20": {
+      "source_key": "dispatch",
+      "kind": "chat_lines",
+      "file": "dispatch.irc",
+      "line_start": 20,
+      "line_end": 20,
+      "exercise_start_ms": 472000,
+      "speaker": "receiving",
+      "quote": "Returns Cage 1 is closed for returns. The sign is still up."
+    }
+  },
+  "cases": [
+    {
+      "id": "first-report",
+      "question": "At 02:28.999, which bay had been reported out of service?",
+      "as_of_ms": 148999,
+      "expected": {
+        "outcome": "supported_report",
+        "subject_id": "bay-3",
+        "reported_status": "out_of_service"
+      },
+      "evidence_ids": [
+        "facilities-F06"
+      ]
+    },
+    {
+      "id": "cross-channel-correction",
+      "question": "At 02:29.000, which bay did the out-of-service report apply to, and what changed?",
+      "as_of_ms": 149000,
+      "expected": {
+        "outcome": "supported_correction",
+        "subject_id": "bay-2",
+        "reported_status": "out_of_service",
+        "corrected_subject_id": "bay-3"
+      },
+      "evidence_ids": [
+        "facilities-F06",
+        "chat-07"
+      ]
+    },
+    {
+      "id": "explicit-acknowledgment",
+      "question": "Who acknowledged the Bay 2 correction, and what did they acknowledge?",
+      "as_of_ms": 160000,
+      "expected": {
+        "outcome": "supported_acknowledgment",
+        "speaker": "dispatch",
+        "subject_id": "bay-2",
+        "target_evidence_id": "chat-07"
+      },
+      "evidence_ids": [
+        "chat-07",
+        "chat-08"
+      ]
+    },
+    {
+      "id": "ambiguous-acknowledgment",
+      "question": "Which report does the 05:48 Copy refer to?",
+      "as_of_ms": 348000,
+      "expected": {
+        "outcome": "unresolved",
+        "candidate_evidence_ids": [
+          "chat-14",
+          "chat-15"
+        ]
+      },
+      "evidence_ids": [
+        "chat-14",
+        "chat-15",
+        "chat-16"
+      ]
+    },
+    {
+      "id": "conflicting-reports",
+      "question": "At 08:00, was Returns Cage 1 open for returns?",
+      "as_of_ms": 480000,
+      "expected": {
+        "outcome": "conflicting_reports",
+        "subject_id": "returns-cage-1",
+        "reported_statuses": [
+          "in_service",
+          "out_of_service"
+        ]
+      },
+      "evidence_ids": [
+        "facilities-F14",
+        "chat-20"
+      ]
+    },
+    {
+      "id": "insufficient-timed-evidence",
+      "question": "Was Bay 2 confirmed back in service by 12:30?",
+      "as_of_ms": 750000,
+      "expected": {
+        "outcome": "insufficient_evidence",
+        "subject_id": "bay-2",
+        "last_aligned_reported_status": "out_of_service"
+      },
+      "evidence_ids": [
+        "facilities-F06",
+        "chat-07"
+      ],
+      "coverage_evidence_ids": [
+        "secondary-radio-U02"
+      ]
+    },
+    {
+      "id": "file-relative-playback",
+      "question": "Where is the untimed Bay 2 return-to-service report?",
+      "as_of_ms": null,
+      "expected": {
+        "outcome": "supported_report_time_unknown",
+        "subject_id": "bay-2",
+        "reported_status": "in_service"
+      },
+      "evidence_ids": [
+        "secondary-radio-U02"
+      ]
+    },
+    {
+      "id": "amended-label",
+      "question": "Which cart was reported staged beside Bay 1 in cue F18?",
+      "as_of_ms": 660000,
+      "expected": {
+        "outcome": "supported_report",
+        "subject_id": "cart-c17",
+        "draft_subject_id": null
+      },
+      "evidence_ids": [
+        "facilities-F18"
+      ]
+    }
+  ],
+  "expected_relationships": [
+    {
+      "type": "corrects",
+      "from_evidence_id": "chat-07",
+      "to_evidence_id": "facilities-F06"
+    },
+    {
+      "type": "acknowledges",
+      "from_evidence_id": "chat-08",
+      "to_evidence_id": "chat-07"
+    }
+  ],
+  "import_checks": {
+    "tracks": [
+      {
+        "source_key": "facilities",
+        "duration_ms": 900000,
+        "transcript_cues": 24
+      },
+      {
+        "source_key": "secondary-radio",
+        "duration_ms": 45000,
+        "transcript_cues": 3
+      }
+    ],
+    "chat_file": "dispatch.irc",
+    "valid_chat_lines": 35,
+    "malformed_chat_lines": [
+      24
+    ],
+    "equal_time_chat_lines": [
+      14,
+      15
+    ],
+    "draft_transcript_file": "facilities-radio-draft.vtt",
+    "amended_cue_id": "F18"
+  }
+}
