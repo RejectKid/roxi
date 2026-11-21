@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Exercise review{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/review.svg">
+  <link rel="stylesheet" href="/static/timeline.css">
+  {% block scripts %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <div class="frame site-brand">
+      <img src="/static/review.svg" width="35" height="35" alt="">
+      <span>Exercise review</span>
+    </div>
+  </header>
+  {% block content %}{% endblock %}
+</body>
+</html>

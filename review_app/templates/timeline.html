@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ exercise.name }} · Exercise review{% endblock %}
+{% block scripts %}<script defer src="/static/timeline.js"></script>{% endblock %}
+{% macro clip_data(record) -%}
+  data-clip
+  data-src="/exercises/{{ exercise.id }}/audio/{{ record.source_file_id }}"
+  data-start="{{ record.audio_start_ms }}"
+  data-end="{{ record.audio_end_ms }}"
+  data-speaker="{{ record.speaker }}"
+  data-transcript="{{ record.body }}"
+  data-key="{{ record.key }}"
+  data-offset="{{ record.audio_start_ms | clock(true) }}"
+  data-clock="{{ 'File offset · Exercise time unknown' if record.capture_offset_ms is none else 'Clip offset' }}"
+{%- endmacro %}
+{% block content %}
+<main class="frame workspace">
+  <h1>{{ exercise.name }}</h1>
+  <p class="subtitle">Synchronized radio and chat <span aria-hidden="true">·</span> {{ duration | clock }}</p>
+
+  <section class="panel overview" aria-labelledby="timeline-title">
+    <h2 id="timeline-title">Exercise timeline</h2>
+    <div class="time-grid">
+      {% for kind, label in [('audio', 'Radio'), ('chat', 'Chat')] %}
+      <div class="lane-label">{{ label }}</div>
+      <div class="lane lane-{{ kind }}" aria-label="{{ label }} capture times">
+        {% for record in aligned if record.kind == kind %}
+        <button type="button" class="marker" style="--position: {{ record.capture_offset_ms * 100 / duration }}%"
+                data-marker="{{ record.key }}" tabindex="-1"
+                title="{{ label }} · {{ record.capture_offset_ms | clock }} · {{ record.speaker }}"
+                aria-label="Show {{ label | lower }} at {{ record.capture_offset_ms | clock }} from {{ record.speaker }}"></button>
+        {% endfor %}
+      </div>
+      {% endfor %}
+      <div class="ruler" aria-hidden="true">
+        {% for tick in ticks %}
+        <span class="tick" style="--position: {{ tick * 100 / duration }}%">{{ tick | clock }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <div class="workspace-grid">
+    <section class="panel communications" aria-labelledby="communications-title">
+      <h2 id="communications-title">Communications</h2>
+      <div class="toolbar">
+        <div class="filters" aria-label="Source filter">
+          <button type="button" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" data-filter="audio" aria-pressed="false">Radio</button>
+          <button type="button" data-filter="chat" aria-pressed="false">Chat</button>
+        </div>
+        <label class="search">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.4"/><path d="m15.5 15.5 4.4 4.4"/></svg>
+          <span class="sr-only">Search communications</span>
+          <input type="search" id="record-search" placeholder="Search communications">
+        </label>
+      </div>
+      <div class="records-scroll">
+        <table class="records">
+          <thead>
+            <tr><th scope="col">Time</th><th scope="col">Source</th><th scope="col">Speaker</th><th scope="col">Message</th></tr>
+          </thead>
+          <tbody>
+            {% for record in aligned %}
+            <tr id="{{ record.key }}" data-record="{{ record.kind }}"
+                class="{{ 'is-selected' if initial_clip and initial_clip.key == record.key else '' }}">
+              <td class="time">{{ record.capture_offset_ms | clock }}</td>
+              <td class="kind"><span class="tag tag-{{ record.kind }}">{{ 'Radio' if record.kind == 'audio' else 'Chat' }}</span></td>
+              <td class="speaker">
+                {% if record.kind == 'audio' %}
+                <button type="button" class="row-button" {{ clip_data(record) }}
+                        aria-label="Select radio at {{ record.capture_offset_ms | clock }} from {{ record.speaker }}">
+                  {{ record.speaker }}
+                </button>
+                {% else %}
+                {{ record.speaker | capitalize }}
+                {% endif %}
+              </td>
+              <td class="message" title="{{ record.original_name }} · {{ 'cue ' ~ (record.cue_id or record.ordinal) if record.kind == 'audio' else 'line ' ~ record.ordinal }}">{{ record.body }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p id="no-results" class="empty-note" {% if aligned %}hidden{% endif %} role="status">No synchronized communications match.</p>
+      </div>
+    </section>
+
+    <aside class="inspection">
+      <section class="panel player" id="audio-panel" aria-labelledby="audio-title">
+        <h2 id="audio-title">Audio playback</h2>
+        {% if initial_clip %}
+        <dl class="clip-metadata" aria-live="polite">
+          <dt>Speaker</dt><dd id="clip-speaker">{{ initial_clip.speaker }}</dd>
+          <dt>Transcript</dt><dd id="clip-text">{{ initial_clip.body }}</dd>
+          <dt id="clip-clock">Clip offset</dt><dd id="clip-offset" class="time">{{ initial_clip.audio_start_ms | clock(true) }}</dd>
+        </dl>
+        <button type="button" class="play-button" id="play-clip">
+          <svg class="play-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path d="M4 2.5a1 1 0 0 1 1.5-.9l12 7.5a1.05 1.05 0 0 1 0 1.8l-12 7.5a1 1 0 0 1-1.5-.9z"/></svg>
+          <svg class="pause-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 20 20" fill="currentColor" hidden><rect x="4" y="3" width="4" height="14" rx="1"/><rect x="12" y="3" width="4" height="14" rx="1"/></svg>
+          <span>Play clip</span>
+        </button>
+        <div class="scrub">
+          <output id="clip-current" class="time" for="clip-position">00:00</output>
+          <input type="range" id="clip-position" aria-label="Position within clip" min="0" max="1" value="0" step="0.001">
+          <span id="clip-duration" class="time"></span>
+        </div>
+        <p id="audio-error" class="audio-error" role="status" hidden></p>
+        <audio id="recording" preload="metadata" data-initial="{{ initial_clip.key }}"></audio>
+        {% else %}
+        <p class="empty-note">No radio clips are available for this exercise.</p>
+        {% endif %}
+      </section>
+
+      <section class="panel coverage" aria-labelledby="coverage-title">
+        <h2 id="coverage-title">Source coverage</h2>
+        {% for source in unaligned %}
+        <details>
+          <summary>{{ source.label }} <span class="coverage-status">· Exercise time unknown</span></summary>
+          <p class="coverage-hint">Clips use offsets within this recording.</p>
+          {% for record in source.clips %}
+          <button type="button" class="unaligned-clip" {{ clip_data(record) }}>
+            <span class="time">{{ record.audio_start_ms | clock }}</span>
+            <span>{{ record.body }}</span>
+          </button>
+          {% else %}
+          <p class="coverage-hint">This recording has no transcript cues.</p>
+          {% endfor %}
+        </details>
+        {% endfor %}
+        {% if issues %}
+        <details>
+          <summary>Chat import <span class="coverage-status">· {{ issues | length }} malformed {{ 'line' if issues | length == 1 else 'lines' }}</span></summary>
+          <ul class="issue-list">
+            {% for issue in issues %}
+            <li><strong>{{ issue.original_name }} · Line {{ issue.line_number }}</strong><span>{{ issue.reason }}</span><code>{{ issue.original_text }}</code></li>
+            {% endfor %}
+          </ul>
+        </details>
+        {% endif %}
+        {% if not issues and not unaligned %}
+        <p class="coverage-hint">All sources are synchronized.</p>
+        {% endif %}
+      </section>
+    </aside>
+  </div>
+</main>
+{% endblock %}
