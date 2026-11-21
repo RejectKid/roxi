@@ -10,9 +10,19 @@
 </head>
 <body>
   <header class="site-header">
-    <div class="frame site-brand">
-      <img src="/static/review.svg" width="35" height="35" alt="">
-      <span>Exercise review</span>
+    <div class="frame site-bar">
+      <a href="/" class="site-brand">
+        <img src="/static/review.svg" width="35" height="35" alt="">
+        <span>Exercise review</span>
+      </a>
+      {% if exercise %}
+      {% set exercise_path = '/exercises/' ~ exercise.id %}
+      <nav class="site-nav" aria-label="Exercise">
+        {% for section, label, suffix in [('timeline', 'Timeline', ''), ('review', 'Review queue', '/review'), ('revisions', 'Revisions', '/revisions')] %}
+        <a href="{{ exercise_path }}{{ suffix }}" {% if nav_section == section %}aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+      </nav>
+      {% endif %}
     </div>
   </header>
   {% block content %}{% endblock %}

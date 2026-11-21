@@ -1,0 +1,14 @@
+{% macro event_time(event) -%}
+  {% if event.capture_offset_ms is not none %}
+    {{ event.capture_offset_ms | clock }}
+  {% else %}
+    File {{ event.audio_start_ms | clock }}
+  {% endif %}
+{%- endmacro %}
+
+{% macro evidence_link(exercise_id, event, revision=none) -%}
+<a href="/exercises/{{ exercise_id }}/evidence/{{ event.source_file_id }}/{{ event.ordinal }}{% if revision %}?revision={{ revision }}{% endif %}">
+  {% if event.source_kind == 'audio' %}Radio · {{ event.original_name }} · {{ event.cue_id or event.ordinal }}
+  {% else %}Chat · {{ event.original_name }} · line {{ event.ordinal }}{% endif %}
+</a>
+{%- endmacro %}

@@ -17,9 +17,18 @@ py -3.13 -m venv .venv
 
 Open [Exercise review](http://127.0.0.1:8000/). The radio and chat lanes share the same exercise clock. Click a radio marker or row to select the transmission, then use **Play clip**. **Source coverage** lists radio clips with unknown exercise time and chat lines that the import skipped.
 
-The first drill import reports three source versions, 62 records, and one diagnostic. An identical retry reports zero new source versions. PostgreSQL data persists in the Compose volume, and the original input bytes are archived under the ignored `.local/archive` directory. The web app uses a read-only database role. The Compose roles and passwords are for this synthetic local setup.
+The first drill import reports three source versions, 62 records, and one diagnostic. An identical retry reports zero new source versions. PostgreSQL data persists in the Compose volume, and the original input bytes are archived under the ignored `.local/archive` directory. Timeline and evidence reads use a read-only database role. Review writes use a separate role with access to draft tables and permission to insert published revisions. The Compose roles and passwords are for this synthetic local setup.
 
 Stop the foreground app with **Ctrl+C**. `docker compose stop db` stops PostgreSQL while keeping the data. On restart, start the database and rerun the last command above.
+
+## Review and publish
+
+1. Open **Review queue** and select **Extract proposals** to start a new draft. Extraction uses the exercise glossary and rules for reports, acknowledgments, and corrections.
+2. Expand an event to inspect its original source and proposed fields. Choose a subject or status, resolve a link if the evidence supports it, select a decision, and click **Save review**. Accept the earlier event before accepting a link to it. An ambiguous acknowledgment can stay unresolved.
+3. Open a radio evidence link to play the archived clip or edit the draft transcript. Transcript text and structured event fields are edited separately. **Extract proposals** can add events from newly recognized transcript content while retaining saved event reviews.
+4. Choose **Publish revision**. The published page records the current event decisions, links, edited transcripts, and input file versions. Use **Revisions** to reopen an older version and play or read its original evidence.
+
+The queue retains unresolved timing and flags recent contradictory reports about the same subject. The queue displays the captured reports and their review decisions so a reviewer can judge what they support. The local app serves this synthetic drill on loopback.
 
 ## West Annex dock flow drill
 

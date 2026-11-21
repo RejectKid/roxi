@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "review_macros.html" import event_time, evidence_link %}
+{% block title %}{{ 'Revision ' ~ selected.number if selected else 'Revisions' }} · {{ exercise.name }}{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="/static/review.css">{% endblock %}
+{% block content %}
+{% set exercise_path = '/exercises/' ~ exercise.id %}
+<main class="frame workspace review-workspace">
+  <div class="page-heading">
+    <div>
+      <h1>{{ 'Revision ' ~ selected.number if selected else 'Published revisions' }}</h1>
+      <p class="subtitle">{{ exercise.name }}{% if selected %} · {{ selected.published_at | date_utc }}{% endif %}</p>
+    </div>
+    {% if selected %}<a class="secondary-button" href="{{ exercise_path }}/revisions">All revisions</a>{% endif %}
+  </div>
+
+  {% if selected %}
+  <section class="panel revision-events" aria-label="Published events">
+    <h2>Events</h2>
+    {% for event in events %}
+    <article class="published-event" id="event-{{ event.id }}">
+      <span class="time event-time">{{ event_time(event) }}</span>
+      <div class="published-copy">
+        <h3>{{ event_labels[event.kind] }}{% if event.subject_id %} · {{ subjects.get(event.subject_id, event.subject_id) }}{% endif %}</h3>
+        <p>{{ event.body }}</p>
+        {% if event.reported_status %}<p class="review-hint">Reported status · {{ status_labels[event.reported_status] }}</p>{% endif %}
+        {% if event.target_id and event.target_id in by_id %}
+        {% set target = by_id[event.target_id] %}
+        <p class="review-hint">{{ 'Corrects' if event.kind == 'correction' else 'Acknowledges' }} <a href="#event-{{ target.id }}">{{ event_time(target) }} {{ event_labels[target.kind] | lower }}</a> · {{ state_labels[event.state] | lower }}</p>
+        {% elif event.kind != 'status_report' %}
+        <p class="review-hint">Link unresolved</p>
+        {% endif %}
+        {% if event.conflicts %}
+        <p class="review-hint">Conflicting report{% if event.conflicts | length > 1 %}s{% endif %}
+          {% for conflict_id in event.conflicts %} · <a href="#event-{{ conflict_id }}">{{ event_time(by_id[conflict_id]) }}</a>{% endfor %}
+        </p>
+        {% endif %}
+        {{ evidence_link(exercise.id, event, selected.number) }}
+        {% if event.target_id and event.target_id in by_id %}
+        <span class="evidence-separator">·</span> {{ evidence_link(exercise.id, by_id[event.target_id], selected.number) }}
+        {% endif %}
+      </div>
+      <span class="decision decision-{{ event.state }}">{{ state_labels[event.state] }}</span>
+    </article>
+    {% else %}
+    <p class="review-empty">This revision contains no extracted events.</p>
+    {% endfor %}
+  </section>
+  {% if transcripts %}
+  <section class="panel revision-events transcript-history">
+    <h2>Transcript edits</h2>
+    {% for transcript in transcripts %}
+    <div class="revision-item">
+      <a href="{{ exercise_path }}/evidence/{{ transcript.source_file_id }}/{{ transcript.ordinal }}?revision={{ selected.number }}">{{ transcript.body }}</a>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% else %}
+  <section class="panel revision-events" aria-label="Revision history">
+    {% for revision in revisions %}
+    <div class="revision-item">
+      <a href="{{ exercise_path }}/revisions/{{ revision.number }}">Revision {{ revision.number }}</a>
+      <span>{{ revision.published_at | date_utc }}</span>
+      <span>{{ revision.event_count }} {{ 'event' if revision.event_count == 1 else 'events' }}</span>
+    </div>
+    {% else %}
+    <p class="review-empty">No revisions yet. <a href="{{ exercise_path }}/review">Open the review queue</a> to publish the current draft.</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

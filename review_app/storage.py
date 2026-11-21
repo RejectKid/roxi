@@ -18,6 +18,11 @@ READER_DSN = os.environ.get(
     "postgresql://review_reader:review-local-reader@127.0.0.1:55432/exercise_review",
 )
 
+EDITOR_DSN = os.environ.get(
+    "EXERCISE_REVIEW_EDITOR_URL",
+    "postgresql://review_editor:review-local-editor@127.0.0.1:55432/exercise_review",
+)
+
 
 @dataclass(frozen=True)
 class ArchivedFile:

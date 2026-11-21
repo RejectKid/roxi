@@ -286,3 +286,21 @@ h2 { font-size: 24px; font-weight: 750; }
   .tag { font-size: 11px; min-width: 0; margin: 0; padding: 2px 4px; }
   .records-scroll { max-height: 24rem; }
 }
+
+.site-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.site-brand { color: var(--ink); text-decoration: none; }
+.site-nav { display: flex; align-items: center; gap: 14px; }
+.site-nav a {
+  padding: 7px 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.site-nav a[aria-current="page"] { color: var(--blue); }
+.site-nav a:hover { text-decoration: underline; }
+@media (max-width: 570px) {
+  .site-bar { flex-wrap: wrap; gap: 0 8px; }
+  .site-nav { gap: 14px; }
+}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Source evidence · {{ exercise.name }}{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="/static/review.css">
+{% if not number %}<script defer src="/static/review.js"></script>{% endif %}
+{% endblock %}
+{% block content %}
+{% set exercise_path = '/exercises/' ~ exercise.id %}
+{% set audio = record.source_kind == 'audio' %}
+<main class="frame workspace review-workspace">
+  <div class="page-heading">
+    <div>
+      <h1>Source evidence</h1>
+      <p class="subtitle">{{ record.original_name }} · {{ ('Cue ' ~ (record.cue_id or record.ordinal)) if audio else ('Line ' ~ record.ordinal) }}</p>
+    </div>
+    <a class="secondary-button" href="{{ exercise_path }}{% if number %}/revisions/{{ number }}{% else %}/review{% endif %}">
+      {{ ('Back to revision ' ~ number) if number else 'Back to review queue' }}
+    </a>
+  </div>
+  <div class="evidence-layout">
+    <section class="panel evidence-panel">
+      <h2>{{ 'Original radio' if audio else 'Original chat line' }}</h2>
+      <dl class="clip-metadata">
+        <dt>Speaker</dt><dd>{{ record.speaker or 'Unknown speaker' }}</dd>
+        <dt>Exercise time</dt><dd>{{ record.capture_offset_ms | clock(true) if record.capture_offset_ms is not none else 'Unknown' }}</dd>
+        {% if audio %}
+        <dt>File range</dt><dd class="time">{{ record.audio_start_ms | clock(true) }}–{{ record.audio_end_ms | clock(true) }}</dd>
+        {% endif %}
+      </dl>
+      {% if audio %}
+      <audio controls preload="metadata" aria-label="Original radio clip"
+             src="{{ exercise_path }}/audio/{{ record.source_file_id }}#t={{ record.audio_start_ms / 1000 }},{{ record.audio_end_ms / 1000 }}"></audio>
+      <p><a href="{{ exercise_path }}/audio/{{ record.source_file_id }}" target="_blank" rel="noopener">Open full recording</a></p>
+      {% else %}
+      <pre class="original-line">{{ record.original_text }}</pre>
+      <p><a href="{{ exercise_path }}/chat/{{ record.source_file_id }}" target="_blank" rel="noopener">Open original chat log</a></p>
+      {% endif %}
+    </section>
+    {% if audio %}
+    <section class="panel evidence-panel">
+      <h2>{{ 'Transcript in revision ' ~ number if number else 'Draft transcript' }}</h2>
+      {% if number or version is none %}
+      <p class="transcript-body">{{ effective_body }}</p>
+      {% else %}
+      <form action="{{ exercise_path }}/evidence/{{ record.source_file_id }}/{{ record.ordinal }}/transcript" data-review-write="transcript">
+        <input type="hidden" name="version" value="{{ version }}">
+        <label for="transcript-text" class="sr-only">Transcript text</label>
+        <textarea id="transcript-text" name="body" rows="4" maxlength="10000" required>{{ effective_body }}</textarea>
+        <button type="submit" class="primary-button">Save transcript</button>
+        <p class="form-error" role="alert" hidden></p>
+      </form>
+      {% endif %}
+      {% if effective_body != record.body %}
+      <h3>Original transcript</h3>
+      <p class="transcript-body">{{ record.body }}</p>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

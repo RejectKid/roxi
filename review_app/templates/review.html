@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% from "review_macros.html" import event_time, evidence_link %}
+{% block title %}Review queue · {{ exercise.name }}{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="/static/review.css">
+<script defer src="/static/review.js"></script>
+{% endblock %}
+{% block content %}
+{% set exercise_path = '/exercises/' ~ exercise.id %}
+<main class="frame workspace review-workspace">
+  <div class="page-heading">
+    <div>
+      <h1>Review queue</h1>
+      <p class="subtitle">{{ exercise.name }}</p>
+    </div>
+    <div class="review-actions">
+      <form action="{{ exercise_path }}/review/extract" data-review-write="extract">
+        <input type="hidden" name="version" value="{{ draft.version if draft else '' }}">
+        <button type="submit" class="secondary-button">{{ 'Refresh from imported sources' if inputs_changed else 'Extract proposals' }}</button>
+        <p class="form-error" role="alert" hidden></p>
+      </form>
+      {% if draft and (not latest or latest.draft_version != draft.version) %}
+      <form action="{{ exercise_path }}/review/publish" data-review-write="publish">
+        <input type="hidden" name="version" value="{{ draft.version }}">
+        <button type="submit" class="primary-button">Publish revision</button>
+        <p class="form-error" role="alert" hidden></p>
+      </form>
+      {% elif latest %}
+      <a class="primary-button" href="{{ exercise_path }}/revisions/{{ latest.number }}">View revision {{ latest.number }}</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if inputs_changed %}
+  <p class="review-notice">New source versions are available. This draft still uses the previous inputs until you refresh.</p>
+  {% endif %}
+  {% if draft %}
+  <div class="panel queue">
+    <div class="queue-toolbar">
+      <nav class="review-filters" aria-label="Review status filter">
+        {% for option, label in [('all', 'All'), ('proposed', 'Proposed'), ('accepted', 'Accepted'), ('rejected', 'Rejected')] %}
+        <a href="{{ exercise_path }}/review{% if option != 'all' %}?state={{ option }}{% endif %}"
+           {% if option == state %}aria-current="page"{% endif %}>
+          {{ label }} <span>{{ events | length if option == 'all' else events | selectattr('state', 'equalto', option) | list | length }}</span>
+        </a>
+        {% endfor %}
+      </nav>
+      {% if latest %}<a class="previous-revision" href="{{ exercise_path }}/revisions/{{ latest.number }}">Latest revision {{ latest.number }}</a>{% endif %}
+    </div>
+    {% for event in events if state == 'all' or state == event.state %}
+    <details class="queue-event" id="event-{{ event.id }}">
+      <summary>
+        <span class="time event-time">{{ event_time(event) }}</span>
+        <span class="summary-text"><strong>{{ event_labels[event.kind] }}</strong><span>{{ event.body }}</span></span>
+        <span class="summary-states">
+          {% if event.conflicts %}<span class="review-flag">Conflict</span>{% endif %}
+          {% if event.kind != 'status_report' and not event.target_id and event.candidates | length > 1 %}<span class="review-flag">Ambiguous link</span>{% endif %}
+          <span class="decision decision-{{ event.state }}">{{ state_labels[event.state] }}</span>
+        </span>
+      </summary>
+      <div class="event-editor">
+        <div class="event-evidence">
+          <p><strong>Source evidence</strong><br>{{ evidence_link(exercise.id, event) }}</p>
+          {% if event.conflicts %}
+          <p><strong>Conflicting report</strong><br>
+            {% for other_id in event.conflicts %}{{ evidence_link(exercise.id, by_id[other_id]) }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+          </p>
+          {% elif event.capture_offset_ms is none %}
+          <p class="review-hint">The clip has a file offset. Its exercise time is unknown.</p>
+          {% endif %}
+          {% if event.kind != 'status_report' and event.candidates %}
+          <p><strong>{{ 'Suggested link' if event.candidates | length == 1 else 'Possible links' }}</strong><br>
+            {% for candidate_id in event.candidates %}{{ evidence_link(exercise.id, by_id[candidate_id]) }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+          </p>
+          {% endif %}
+        </div>
+        {% set suggested = event.candidates[0] if event.state == 'proposed' and event.candidates | length == 1 else none %}
+        {% set selected_target = event.target_id or suggested %}
+        <form class="event-form" action="{{ exercise_path }}/review/events/{{ event.id }}" data-review-write="event" data-event-id="{{ event.id }}">
+          <input type="hidden" name="version" value="{{ draft.version }}">
+          <label>{{ 'Replacement subject' if event.kind == 'correction' else 'Subject' }}
+            <select name="subject_id">
+              <option value="">Unresolved</option>
+              {% for id, label in subjects.items() %}
+              <option value="{{ id }}" {% if event.subject_id == id %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          {% if event.kind != 'acknowledgment' %}
+          <label>{{ 'Replacement reported status' if event.kind == 'correction' else 'Reported status' }}
+            <select name="reported_status" {% if event.kind == 'status_report' %}required{% endif %}>
+              {% if event.kind == 'correction' %}<option value="">Carry forward from the linked report</option>{% endif %}
+              {% for code, label in status_labels.items() %}
+              <option value="{{ code }}" {% if event.reported_status == code %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          {% endif %}
+          {% if event.kind != 'status_report' %}
+          <label class="form-wide">Linked {{ 'correction or report' if event.kind == 'acknowledgment' else 'earlier report or correction' }}
+            <select name="target_id">
+              <option value="">Leave unresolved</option>
+              {% for target in event.options %}
+              <option value="{{ target.id }}" {% if selected_target == target.id %}selected{% endif %}>
+                {{ event_time(target) }} · {{ event_labels[target.kind] }} · {{ subjects.get(target.subject_id, 'Unresolved subject') }} · {{ state_labels[target.state] }}
+              </option>
+              {% endfor %}
+            </select>
+          </label>
+          {% endif %}
+          <label>Decision
+            <select name="state">
+              {% for code, label in state_labels.items() %}
+              <option value="{{ code }}" {% if event.state == code %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <div class="form-submit"><button type="submit" class="primary-button">Save review</button></div>
+          <p class="form-error form-wide" role="alert" hidden></p>
+        </form>
+      </div>
+    </details>
+    {% else %}
+    <p class="review-empty">No events in this view.</p>
+    {% endfor %}
+  </div>
+  {% else %}
+  <section class="panel review-empty">Extract proposals to start a draft from the imported exercise.</section>
+  {% endif %}
+</main>
+{% endblock %}

@@ -4,23 +4,22 @@ import psycopg
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .review_routes import router as review_router
+from .review_store import ReviewError
 from .storage import ROOT, archive_path, connect_read
+from .views import templates
 
 app = FastAPI(title="Exercise review")
 app.mount("/static", StaticFiles(directory=ROOT / "review_app" / "static"), name="static")
-templates = Jinja2Templates(directory=ROOT / "review_app" / "templates")
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
+app.include_router(review_router)
 
 
-def clock(milliseconds: int, precise: bool = False) -> str:
-    minutes, remainder = divmod(milliseconds, 60000)
-    seconds, fractional = divmod(remainder, 1000)
-    result = f"{minutes:02d}:{seconds:02d}"
-    return f"{result}.{fractional:03d}" if precise else result
-
-
-templates.env.filters["clock"] = clock
+@app.exception_handler(ReviewError)
+async def review_error(_request: Request, error: ReviewError):
+    return JSONResponse({"detail": error.detail}, status_code=error.status)
 
 
 @app.exception_handler(psycopg.OperationalError)
@@ -101,6 +100,7 @@ def timeline(request: Request, exercise_id: str | None = None):
         "timeline.html",
         {
             "exercise": exercise,
+            "nav_section": "timeline",
             "aligned": aligned,
             "unaligned": unaligned,
             "duration": duration,
@@ -111,16 +111,25 @@ def timeline(request: Request, exercise_id: str | None = None):
     )
 
 
-@app.get("/exercises/{exercise_id}/audio/{source_id}")
-def recording(exercise_id: str, source_id: int):
+def original_file(exercise_id: str, source_id: int, kind: str, media_type: str):
     with connect_read() as conn:
         source = conn.execute(
-            "SELECT content_sha256 FROM source_file WHERE id = %s AND exercise_id = %s AND kind = 'audio'",
-            (source_id, exercise_id),
+            "SELECT content_sha256 FROM source_file WHERE id = %s AND exercise_id = %s AND kind = %s",
+            (source_id, exercise_id, kind),
         ).fetchone()
     if source is None:
-        raise HTTPException(404, "Recording not found.")
+        raise HTTPException(404, "Source file not found.")
     path = archive_path(source["content_sha256"])
     if not path.is_file():
-        raise HTTPException(410, "The recording is unavailable in the local archive.")
-    return FileResponse(path, media_type="audio/wav", headers={"X-Content-Type-Options": "nosniff"})
+        raise HTTPException(410, "The source file is unavailable in the local archive.")
+    return FileResponse(path, media_type=media_type, headers={"X-Content-Type-Options": "nosniff"})
+
+
+@app.get("/exercises/{exercise_id}/audio/{source_id}")
+def recording(exercise_id: str, source_id: int):
+    return original_file(exercise_id, source_id, "audio", "audio/wav")
+
+
+@app.get("/exercises/{exercise_id}/chat/{source_id}")
+def chat_log(exercise_id: str, source_id: int):
+    return original_file(exercise_id, source_id, "chat", "text/plain")
