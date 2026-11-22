@@ -2,3 +2,5 @@
 .local/
 __pycache__/
 *.py[cod]
+/fixtures/drill-01/input/facilities-radio.wav
+/fixtures/drill-01/input/unaligned-radio.wav

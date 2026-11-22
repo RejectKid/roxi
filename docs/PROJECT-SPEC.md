@@ -1,4 +1,4 @@
-# Exercise Communications Review Platform
+# Roxi Technical Specification
 
 This platform turns recorded voice and chat from a completed exercise into a searchable, evidence-linked record. A reviewer can trace a proposed conclusion to the original audio or message. Developers can build a chatbot, evidence verifier, or reporting client against the same published exercise revision through HTTP or the Model Context Protocol (MCP).
 

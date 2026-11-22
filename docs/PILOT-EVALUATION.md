@@ -51,7 +51,7 @@ The desktop Chrome check opened the correction's original chat line and started 
 
 ## Repeat the checks
 
-Run the following from the repository root on a fresh local database or with a new exercise ID and fresh output directories. The cue map applies to the captured `small.en` segmentation from the drill and requires review if a new model run changes those fragments.
+Generate the two fixture WAVs with the [local setup command](../README.md#run-the-local-app). Run the following from the repository root on a fresh local database or with a new exercise ID and fresh output directories. The cue map applies to the captured `small.en` segmentation from the drill and requires review if a new model run changes those fragments.
 
 ```powershell
 .venv/Scripts/python.exe -m review_app transcribe fixtures/drill-01/input/exercise.json .local/drill-01-asr-rerun --exercise-id drill-01-asr

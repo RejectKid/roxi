@@ -1,12 +1,13 @@
-# Exercise Communications Review
+# Roxi
 
-A project for reviewing recorded exercise voice and chat. The first milestone is a synthetic dataset for testing timestamp alignment, evidence playback, cross-channel corrections, and answers about incomplete records.
+Roxi turns recordings and chat from completed exercises into a searchable, evidence-linked record. Review and publish reports, corrections, and acknowledgments, then ask questions and open the original evidence behind each answer.
 
 ## Run the local app
 
-Use Docker Desktop with the Linux engine running and Python 3.13. From the repository root in PowerShell, run the following commands.
+Use Windows with the Microsoft David Desktop and Microsoft Zira Desktop voices, Docker Desktop with the Linux engine running, and Python 3.13. From a fresh checkout, run the following commands in PowerShell. The first command generates the fictional drill's WAV files locally.
 
 ```powershell
+powershell.exe -NoProfile -File tools/Build-DrillAudio.ps1
 docker compose up -d --wait db
 py -3.13 -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
@@ -46,9 +47,9 @@ For a local stdio MCP client, register the following server. Use the project pat
 {
   "mcpServers": {
     "exercise-review": {
-      "command": "E:\\Projects\\exercise-communications-review\\.venv\\Scripts\\python.exe",
+      "command": "C:\\path\\to\\roxi\\.venv\\Scripts\\python.exe",
       "args": ["-m", "review_app.mcp_server"],
-      "env": { "PYTHONPATH": "E:\\Projects\\exercise-communications-review" }
+      "env": { "PYTHONPATH": "C:\\path\\to\\roxi" }
     }
   }
 }
@@ -84,19 +85,15 @@ The setting and participants are fictional. Windows speech synthesis supplies th
 | Path | Contents |
 | --- | --- |
 | [Exercise manifest](fixtures/drill-01/input/exercise.json) | Source paths, timing anchors, and the exercise glossary. |
-| [Facilities audio](fixtures/drill-01/input/facilities-radio.wav) and [WebVTT](fixtures/drill-01/input/facilities-radio.vtt) | Main recording with 24 timestamped speaker turns. |
-| [Secondary audio](fixtures/drill-01/input/unaligned-radio.wav) and [WebVTT](fixtures/drill-01/input/unaligned-radio.vtt) | Three speaker turns indexed by time within the file. |
+| [Facilities WebVTT](fixtures/drill-01/input/facilities-radio.vtt) | Script for the locally generated `facilities-radio.wav`, with 24 timestamped speaker turns. |
+| [Secondary WebVTT](fixtures/drill-01/input/unaligned-radio.vtt) | Script for the locally generated `unaligned-radio.wav`, with three speaker turns indexed by file offset. |
 | [IRC-style export](fixtures/drill-01/input/dispatch.irc) | Elapsed timestamps, 35 valid lines, and one intentionally malformed timestamp. |
 | [Answer key](fixtures/drill-01/reference/answer-key.md) and [structured key](fixtures/drill-01/reference/answer-key.json) | Eight scored questions with audio intervals and chat line references. |
 | [Draft transcript fixture](fixtures/drill-01/reference/facilities-radio-draft.vtt) | Alternative transcript for testing a one-cue correction across two revisions. |
 
 Import only `fixtures/drill-01/input`. For a quick manual walkthrough, seek to **02:04** in the main WAV, then read **02:29** and **02:40** in the chat export. The answer key covers the correction, acknowledgment, ambiguous reply, conflicting reports, and missing time anchor.
 
-The audio files are checked in and ready to play. To regenerate them after editing the authored WebVTT scripts, run the following from the repository root in Windows PowerShell with Microsoft David Desktop and Microsoft Zira Desktop installed.
-
-```powershell
-powershell.exe -NoProfile -File tools/Build-DrillAudio.ps1
-```
+The public fixture includes the original fictional scripts, chat, glossary, and answer key. The audio generator uses voices supplied by Windows, so it creates the two WAVs in `fixtures/drill-01/input` on your machine. Git ignores the generated audio. [Fixture provenance](fixtures/drill-01/README.md)
 
 ## Project plan
 
