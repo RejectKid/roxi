@@ -1,0 +1,28 @@
+source_key	cue_id	speaker	onset_ms	offset_ms	generated_cues
+facilities	F01	Dispatch	8100	13150	S001
+facilities	F02	Facilities	23120	26720	S002 S003
+facilities	F03	Receiving	44100	48790	S004 S005
+facilities	F04	Yard	71080	75370	S006 S007
+facilities	F05	Dispatch	98100	102580	S008
+facilities	F06	Facilities	124130	125600	S009 S010
+facilities	F07	Facilities	175120	180130	S011
+facilities	F08	Receiving	206130	210820	S012
+facilities	F09	Dispatch	248090	252170	S013
+facilities	F10	Inventory	289080	291570	S014
+facilities	F11	Yard	312080	314480	S015
+facilities	F12	Dispatch	368100	372040	S016 S017
+facilities	F13	Receiving	397120	401280	S018
+facilities	F14	Facilities	455110	457640	S019
+facilities	F15	Receiving	499110	502410	S020
+facilities	F16	Inventory	535080	539160	S021 S022
+facilities	F17	Dispatch	578110	582350	S023 S024
+facilities	F18	Yard	642080	646320	S025 S026
+facilities	F19	Receiving	683100	685780	S027
+facilities	F20	Facilities	725120	728080	S028
+facilities	F21	Dispatch	768100	772700	S029 S030
+facilities	F22	Yard	806080	809810	S031 S032
+facilities	F23	Receiving	858100	862580	S033 S034
+facilities	F24	Dispatch	893090	896550	S035 S036
+secondary-radio	U01	Maintenance	4100	7950	S001 S002
+secondary-radio	U02	Maintenance	15130	17810	S003
+secondary-radio	U03	Maintenance	33100	37210	S004 S005

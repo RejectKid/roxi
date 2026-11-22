@@ -195,7 +195,9 @@ class Answerer:
             if latest and last_status:
                 text += f" The latest time-aligned report says {self.label(latest.subject_id)} was {STATUS[last_status]}."
             if unknown:
-                text += " A separate report has an unknown exercise time."
+                untimed = unknown[0]
+                text += f" A separate report says {self.label(untimed.subject_id)} was {STATUS[untimed.payload.reported_status]}."
+                text += " Its exercise time is unknown."
             return text, self.claim(
                 "insufficient_evidence", subject_id=self.plan.subject, last_aligned_reported_status=last_status,
                 event_ids=[latest.event_id] if latest else [],
@@ -208,8 +210,11 @@ class Answerer:
             if peer is not None:
                 pair = sorted([peer, report], key=lambda item: item.capture_offset_ms)
                 statuses = [reported_status(item, self.by_id) for item in pair]
-                text = f"The published reports disagree about {self.label(report.subject_id)}. "
-                text += f"One reported it {STATUS[statuses[0]]} and the other reported it {STATUS[statuses[1]]}."
+                text = f"The published reports disagree about {self.label(report.subject_id)}."
+                for item in pair:
+                    record = evidence(self.pin, item.evidence_ids[0])
+                    speaker = record.speaker or f"The source {record.original_name}"
+                    text += f" {speaker[0].upper() + speaker[1:]} reported “{record.excerpt.rstrip('.')}.”"
                 return text, self.claim(
                     "conflicting_reports", subject_id=report.subject_id, reported_statuses=statuses,
                     event_ids=[item.event_id for item in pair],
@@ -232,6 +237,8 @@ class Answerer:
                 text = f"The correction changed the subject from {self.label(link.subject_id)} to {self.label(event.subject_id)}."
             if status and status != "unknown":
                 text += f" The corrected report says {self.label(event.subject_id)} was {STATUS[status]}."
+            if link.subject_id and link.subject_id != event.subject_id:
+                text += f" These messages leave {self.label(link.subject_id)}’s actual condition unknown."
             return text, self.claim(
                 "supported_correction", subject_id=event.subject_id, corrected_subject_id=link.subject_id,
                 reported_status=status, event_ids=[event.event_id, link.event_id], evidence_ids=link.evidence_ids,
@@ -263,8 +270,12 @@ class Answerer:
         if link:
             target = self.by_id[link.event_id]
             speaker = record.speaker or "The recorded speaker"
-            text = f"{speaker[0].upper() + speaker[1:]} acknowledged the {self.label(link.subject_id)} "
-            text += f"{'correction' if link.event_type == 'correction' else 'report'}. The acknowledgment records receipt."
+            kind = "correction" if link.event_type == "correction" else "report"
+            text = f"{speaker[0].upper() + speaker[1:]} acknowledged the {self.label(link.subject_id)} {kind}."
+            received_status = reported_status(target, self.by_id)
+            if received_status and received_status != "unknown":
+                text += f" The {kind} said {self.label(link.subject_id)} was {STATUS[received_status]}."
+            text += " The acknowledgment records receipt."
             return text, self.claim(
                 "supported_acknowledgment", speaker=record.speaker, subject_id=link.subject_id,
                 target_evidence_id=target.evidence_ids[0], event_ids=[event.event_id, target.event_id],

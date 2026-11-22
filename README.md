@@ -75,7 +75,7 @@ Open **Assistant** after publishing a review revision. The assistant uses exact 
 
 For broader wording, run Ollama locally and load `qwen3.5:4b`. In one terminal set `$env:OLLAMA_NO_CLOUD = '1'` and run `ollama serve`. In another terminal run `ollama pull qwen3.5:4b` once. The assistant uses the local service at `127.0.0.1:11434`. [Ollama local mode](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features)
 
-The [pilot evaluation](docs/PILOT-EVALUATION.md) records the transcription score, answer-key results, and commands to rerun them.
+The [pilot evaluation](docs/PILOT-EVALUATION.md) records the raw transcription score, the results for a published revision built from reviewed automatic transcripts, and commands to reproduce them.
 
 ## West Annex dock flow drill
 
