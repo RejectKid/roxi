@@ -17,7 +17,7 @@ Build the first release around a 15-minute fictional logistics drill. By the end
 
 Milestones 2 through 4 use the reference transcript so storage, review, and tool behavior can be tested while speech recognition is being evaluated. Keep each milestone runnable locally with the same fixture set.
 
-The MVP ends at the reviewed, cited question-answering demo in Milestone 6. Milestone 7 publishes the project, and Milestone 8 prepares its first polished release. The timeline-versus-structured-view comparison remains part of the broader pilot evaluation.
+The MVP ends at the reviewed, cited question-answering demo in Milestone 6. Milestone 7 publishes the project, and Milestone 8 prepares its first polished release. [Milestones 9–14](LIVE-ROADMAP.md) cover a live civilian logistics pilot, source adapters, typed queries, and operational readiness. The timeline-versus-structured-view comparison remains part of the broader pilot evaluation.
 
 ## First fixture and expected results
 

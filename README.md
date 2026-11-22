@@ -39,7 +39,7 @@ The default app and database bind to loopback. PostgreSQL persists in the Compos
 | Run local speech-to-text or repeat the answer-key evaluation | [Transcription and pilot evaluation](docs/PILOT-EVALUATION.md) |
 | Fix setup, playback, or MCP problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Run tests or prepare a release | [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) |
-| Understand the architecture and next milestones | [Technical specification](docs/PROJECT-SPEC.md) · [Roadmap](docs/IMPLEMENTATION-PLAN.md) |
+| Understand the architecture and next milestones | [Technical specification](docs/PROJECT-SPEC.md) · [Implementation plan](docs/IMPLEMENTATION-PLAN.md) · [Live data roadmap](docs/LIVE-ROADMAP.md) |
 
 The app can route more freely worded questions through local Ollama. The scripted demo uses the built-in question rules and succeeds without a model download. [Optional Ollama setup](docs/DEMO.md#optional-local-language-model)
 
