@@ -4,7 +4,7 @@ This is the scoring reference for the fictional 15-minute West Annex dock flow d
 
 ## Scored questions
 
-Exercise times are elapsed from the start of the drill. Audio citations list offsets into the locally generated WAV files. [Generate the recordings](../../../README.md#run-the-local-app)
+Exercise times are elapsed from the start of the drill. Audio citations list offsets into the locally generated WAV files. [Generate the recordings](../../../README.md#quickstart)
 
 | Question | Expected answer | Source |
 | --- | --- | --- |

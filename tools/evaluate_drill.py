@@ -133,9 +133,9 @@ def normalized_excerpt(text: str) -> list[str]:
     return [NUMBER_FORMS.get(word, word) for word in words(text)]
 
 
-def check_original(base: str, item: dict, expected: dict, reviewed_asr: bool) -> bool:
+def check_original(base: str, item: dict, expected: dict, reviewed_asr: bool, source_root: Path) -> bool:
     locator = item["locator"]
-    path = REFERENCE / "input" / expected["file"]
+    path = source_root / expected["file"]
     if (item["channel"], item["original_name"], item["speaker"], locator["kind"], item["source_sha256"]) != (
         expected["source_key"], expected["file"], expected["speaker"], expected["kind"], source_hash(path)
     ):
@@ -174,7 +174,8 @@ def check_original(base: str, item: dict, expected: dict, reviewed_asr: bool) ->
     return False
 
 
-def score_chat(base: str, exercise_id: str, revision: int, reviewed_asr: bool = False) -> dict:
+def score_chat(base: str, exercise_id: str, revision: int, reviewed_asr: bool = False,
+               source_root: Path = REFERENCE / "input") -> dict:
     answer_key = json.loads((REFERENCE / "reference" / "answer-key.json").read_text(encoding="utf-8"))
     path = f"/exercises/{exercise_id}/assistant"
     results = []
@@ -194,7 +195,7 @@ def score_chat(base: str, exercise_id: str, revision: int, reviewed_asr: bool = 
                     gold.get("cue_id"), gold.get("line_start"), gold["file"]
                 ):
                     continue
-                if check_original(base, citation, gold, reviewed_asr):
+                if check_original(base, citation, gold, reviewed_asr, source_root):
                     names[citation["evidence_id"]] = key
                 break
 
@@ -243,6 +244,12 @@ def score_chat(base: str, exercise_id: str, revision: int, reviewed_asr: bool = 
     }
 
 
+def chat_passed(report: dict) -> bool:
+    return (report["answers_matched"] == report["citations_matched"] == report["verified"] == len(report["cases"])
+            and report["wrong_subject_control"] == "contradicted"
+            and report["invalid_locator_control"] == "insufficient_evidence")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--asr-bundle", type=Path)
@@ -266,12 +273,8 @@ def main() -> None:
     if args.output:
         args.output.write_text(output, encoding="utf-8")
     print(output, end="")
-    if "chat" in report:
-        chat = report["chat"]
-        if not (chat["answers_matched"] == chat["citations_matched"] == chat["verified"] == len(chat["cases"])
-                and chat["wrong_subject_control"] == "contradicted"
-                and chat["invalid_locator_control"] == "insufficient_evidence"):
-            raise SystemExit(1)
+    if "chat" in report and not chat_passed(report["chat"]):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

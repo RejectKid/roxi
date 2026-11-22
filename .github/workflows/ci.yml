@@ -1,0 +1,64 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install and check dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip check
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+  demo:
+    name: PostgreSQL, HTTP, MCP, and answer-key checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EXERCISE_REVIEW_DATABASE_URL: postgresql://review_owner:review-local-owner@127.0.0.1:55432/exercise_review
+      EXERCISE_REVIEW_EDITOR_URL: postgresql://review_editor:review-local-editor@127.0.0.1:55432/exercise_review
+      EXERCISE_REVIEW_READER_URL: postgresql://review_reader:review-local-reader@127.0.0.1:55432/exercise_review
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Start disposable PostgreSQL
+        run: docker compose up -d --wait db
+      - name: Import, publish, and verify the demo
+        run: python tools/smoke_demo.py
+      - name: Show database logs on failure
+        if: failure()
+        run: docker compose logs db
+      - name: Remove CI database
+        if: always()
+        run: docker compose down --volumes
