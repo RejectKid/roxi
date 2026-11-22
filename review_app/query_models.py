@@ -131,6 +131,7 @@ class EventItem(BaseModel):
     evidence_ids: list[EvidenceId]
     relationships: list[Relationship]
     conflicting_event_ids: list[int]
+    candidate_event_ids: list[int] = Field(default_factory=list)
 
 
 class ReportPayload(BaseModel):

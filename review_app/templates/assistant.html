@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Assistant · {{ exercise.name }}{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="/static/assistant.css">
+{% if selected %}<script defer src="/static/assistant.js"></script>{% endif %}
+{% endblock %}
+{% block content %}
+<main class="frame workspace assistant">
+  <div class="assistant-heading">
+    <div>
+      <h1>Exercise assistant</h1>
+      <p class="subtitle">{{ exercise.name }}</p>
+    </div>
+    {% if selected %}
+    <form action="/exercises/{{ exercise.id }}/assistant" class="revision-select">
+      <label>Published revision
+        <select name="revision_id">
+          {% for row in revisions %}
+          <option value="{{ row.number }}"{% if row.number == selected.number %} selected{% endif %}>Revision {{ row.number }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit">Open</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if selected %}
+  <section class="panel conversation" aria-label="Exercise questions and answers">
+    <div class="messages" id="messages" role="log" aria-live="polite">
+      <p class="assistant-intro">Ask about a report, a correction, an acknowledgment, or an original recording. Use elapsed exercise time for a cutoff.</p>
+    </div>
+    <form class="question-form" id="question-form" action="/exercises/{{ exercise.id }}/assistant/ask" data-revision="{{ selected.number }}">
+      <label class="sr-only" for="question">Question about this revision</label>
+      <textarea id="question" name="question" rows="2" maxlength="1000" placeholder="Ask a question about this revision…" required></textarea>
+      <button type="submit">Ask</button>
+    </form>
+  </section>
+  {% else %}
+  <section class="panel conversation assistant-intro">
+    <p>Publish a revision to ask questions about this exercise.</p>
+    <a href="/exercises/{{ exercise.id }}/review">Open the review queue</a>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

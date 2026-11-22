@@ -1,0 +1,43 @@
+.assistant { max-width: 1000px; }
+.assistant-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.revision-select { display: flex; align-items: flex-end; gap: 8px; margin-top: 3px; }
+.revision-select label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.revision-select select, .revision-select button, .question-form button, .question-form textarea {
+  border: 1px solid #aeb8c8;
+  border-radius: 6px;
+  padding: 7px 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+.revision-select select, .revision-select button { min-height: 38px; }
+.question-form button { align-self: end; padding: 8px 19px; color: white; background: var(--blue); border-color: var(--blue); font-weight: 650; }
+.question-form button:disabled { opacity: .65; cursor: wait; }
+.conversation { overflow: hidden; }
+.messages { min-height: 260px; max-height: min(62vh, 630px); overflow-y: auto; padding: 17px 20px; }
+.assistant-intro { color: var(--muted); margin: 0; padding: 8px 0; }
+section.assistant-intro { padding: 16px 20px; }
+.question-form { display: flex; gap: 10px; align-items: center; padding: 12px 17px; border-top: 1px solid var(--line); }
+.question-form textarea { flex: 1; min-width: 0; resize: vertical; }
+.question-message, .answer-message { margin: 12px 0; padding: 12px 14px; border-radius: 7px; overflow-wrap: anywhere; }
+.question-message { margin-left: auto; width: fit-content; max-width: 84%; background: var(--radio-bg); }
+.answer-message { max-width: 92%; border: 1px solid var(--rule); background: #fafbfe; }
+.answer-message > p { margin: 3px 0 8px; }
+.verdict { display: inline-block; margin-bottom: 3px; padding: 2px 7px; border-radius: 4px; font-size: 13px; font-weight: 650; background: #f8efd8; color: #654617; }
+.verdict-supported { background: var(--chat-bg); color: #06564f; }
+.verdict-contradicted { background: #f3eae9; color: #733932; }
+.verifier-detail, .parser-note { color: var(--muted); font-size: 13px; }
+.parser-note { margin-top: 10px !important; }
+.citation-list { margin: 9px 0 0; padding-left: 20px; font-size: 14px; }
+.citation-list li + li { margin-top: 6px; }
+.citation-list a { color: #103dac; font-weight: 600; }
+.citation-excerpt { display: block; color: var(--muted); }
+.coverage-label { margin-left: 7px; color: #654617; }
+.assistant-error { color: #9d2e28; }
+@media (max-width: 640px) {
+  .assistant-heading { flex-wrap: wrap; gap: 0; margin-bottom: 12px; }
+  .assistant-heading .subtitle { margin-bottom: 8px; }
+  .messages { padding: 12px; }
+  .question-form { padding: 9px; gap: 7px; }
+  .question-form button { padding: 8px 11px; }
+}

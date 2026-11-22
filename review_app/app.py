@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import query_service
+from .assistant_routes import router as assistant_router
 from .query_routes import router as query_router
 from .review_routes import router as review_router
 from .review_store import ReviewError
@@ -20,6 +21,7 @@ app.mount("/static", StaticFiles(directory=ROOT / "review_app" / "static"), name
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 app.include_router(review_router)
 app.include_router(query_router)
+app.include_router(assistant_router)
 
 
 @app.exception_handler(ReviewError)

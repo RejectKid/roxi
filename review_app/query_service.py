@@ -255,12 +255,13 @@ def published_links(events: list[dict], cutoff: int | None, review_state: str) -
     return edges
 
 
-def event_item(event: dict, links: list[model.Relationship], conflicting: list[int]) -> model.PublishedEvent:
+def event_item(event: dict, links: list[model.Relationship], conflicting: list[int], candidates: list[int]) -> model.PublishedEvent:
     capture = event["capture_offset_ms"]
     common = {
         "event_id": event["id"], "subject_id": event["subject_id"], "capture_offset_ms": capture,
         "timing_quality": timing_quality(capture), "review_state": event["state"],
         "evidence_ids": [event_evidence(event)], "relationships": links, "conflicting_event_ids": conflicting,
+        "candidate_event_ids": candidates,
     }
     if event["kind"] == "status_report":
         return model.ReportEvent(**common, payload=model.ReportPayload(reported_status=event["reported_status"]))
@@ -309,6 +310,8 @@ def list_events(request: model.EventRequest) -> model.EventPage:
                     and (request.review_state == "all" or event["state"] == request.review_state)}
     items = [event_item(event, links.get(event["id"], []), [
         other for other in event["conflicts"] if other in eligible_ids
+    ], [
+        other for other in event.get("candidates", []) if other in eligible_ids and event["target_id"] is None
     ]) for event in page]
     next_cursor = encode_cursor(fingerprint, key(page[-1])) if len(hits) > request.limit else None
     return model.EventPage(exercise_id=request.exercise_id, revision_id=request.revision_id,

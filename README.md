@@ -60,6 +60,23 @@ For raw evidence, use the returned `original_path` relative to the HTTP app base
 
 The developer interfaces use the read-only PostgreSQL connection. The HTTP app is local and the MCP transport uses stdio. To restrict developer queries to specific exercises, set `EXERCISE_REVIEW_API_EXERCISES` to a comma-separated list of allowed exercise IDs in both processes. An unset list allows all local published exercises.
 
+## Transcribe recordings and ask questions
+
+The local worker generates timestamped WebVTT and writes an importable bundle. Use a separate exercise ID to compare an automatic transcript with a reviewed exercise.
+
+```powershell
+.venv/Scripts/python.exe -m review_app transcribe fixtures/drill-01/input/exercise.json .local/drill-01-asr-run --exercise-id drill-01-asr
+.venv/Scripts/python.exe -m review_app import .local/drill-01-asr-run/exercise.json
+```
+
+The default model is Faster Whisper `small.en`. Model weights cache under `.local/models` on first use. Add `--offline` to require cached weights. Audio inference runs on the machine. Generated cues contain file offsets and text. Speaker labels can come from reviewed transcripts. [Faster Whisper documentation](https://github.com/SYSTRAN/faster-whisper)
+
+Open **Assistant** after publishing a review revision. The assistant uses exact glossary aliases, timestamps, and cue IDs when it can, and uses local Ollama to route broader questions. It returns evidence links and a separate verdict produced by the read-only MCP verifier. Every question is evaluated against the selected revision.
+
+For broader wording, run Ollama locally and load `qwen3.5:4b`. In one terminal set `$env:OLLAMA_NO_CLOUD = '1'` and run `ollama serve`. In another terminal run `ollama pull qwen3.5:4b` once. The assistant uses the local service at `127.0.0.1:11434`. [Ollama local mode](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features)
+
+The [pilot evaluation](docs/PILOT-EVALUATION.md) records the transcription score, answer-key results, and commands to rerun them.
+
 ## West Annex dock flow drill
 
 The setting and participants are fictional. Windows speech synthesis supplies the voices. The facilities track covers the full 15-minute drill with silences between radio transmissions. The 45-second secondary track deliberately has no known start time on the exercise clock. Both are mono, 16-bit PCM WAV at 16 kHz.
