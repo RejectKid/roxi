@@ -2,10 +2,14 @@ import math
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from . import query_service
+from .query_routes import router as query_router
 from .review_routes import router as review_router
 from .review_store import ReviewError
 from .storage import ROOT, archive_path, connect_read
@@ -15,6 +19,7 @@ app = FastAPI(title="Exercise review")
 app.mount("/static", StaticFiles(directory=ROOT / "review_app" / "static"), name="static")
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
 app.include_router(review_router)
+app.include_router(query_router)
 
 
 @app.exception_handler(ReviewError)
@@ -22,8 +27,22 @@ async def review_error(_request: Request, error: ReviewError):
     return JSONResponse({"detail": error.detail}, status_code=error.status)
 
 
+@app.exception_handler(query_service.QueryError)
+async def query_error(_request: Request, error: query_service.QueryError):
+    return JSONResponse(error.result().model_dump(mode="json"), status_code=error.status)
+
+
+@app.exception_handler(RequestValidationError)
+async def validate_request(request: Request, error: RequestValidationError):
+    if request.url.path.startswith("/v1/"):
+        return await query_error(request, query_service.invalid())
+    return await request_validation_exception_handler(request, error)
+
+
 @app.exception_handler(psycopg.OperationalError)
-async def database_unavailable(_request: Request, _error: psycopg.OperationalError):
+async def database_unavailable(request: Request, _error: psycopg.OperationalError):
+    if request.url.path.startswith("/v1/"):
+        return await query_error(request, query_service.unavailable())
     return JSONResponse({"detail": "The local PostgreSQL database is unavailable."}, status_code=503)
 
 

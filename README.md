@@ -30,6 +30,36 @@ Stop the foreground app with **Ctrl+C**. `docker compose stop db` stops PostgreS
 
 The queue retains unresolved timing and flags recent contradictory reports about the same subject. The queue displays the captured reports and their review decisions so a reviewer can judge what they support. The local app serves this synthetic drill on loopback.
 
+## Query published revisions
+
+Publish a draft from **Review queue**, then open the [HTTP OpenAPI docs](http://127.0.0.1:8000/docs). The API and MCP server serve the same published events, transcripts, and evidence. Resolve the latest revision once, then keep its numeric ID in each query.
+
+Run this example from the repository root to check both interfaces. It starts a local MCP subprocess and opens each kind of original source available in the revision.
+
+```powershell
+.venv/Scripts/python.exe tools/check_published_parity.py --exercise drill-01
+```
+
+For a local stdio MCP client, register the following server. Use the project path on your machine if it differs from this checkout.
+
+```json
+{
+  "mcpServers": {
+    "exercise-review": {
+      "command": "E:\\Projects\\exercise-communications-review\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "review_app.mcp_server"],
+      "env": { "PYTHONPATH": "E:\\Projects\\exercise-communications-review" }
+    }
+  }
+}
+```
+
+The tools are **get_exercise_revision**, **search_records**, **list_events**, and **get_evidence**. Event queries default to accepted events. Use `review_state=all` to include proposals and rejected decisions. Record search matches case-insensitive text in the published transcript or chat excerpt. Cursors are opaque and bound to the revision and filters.
+
+For raw evidence, use the returned `original_path` relative to the HTTP app base. The radio `playback_path` adds the clip start and end offsets. The original recording supports byte ranges, and the chat result includes the exact original line and its line number. Evidence IDs from a changed transcript resolve only in revisions that contain that text.
+
+The developer interfaces use the read-only PostgreSQL connection. The HTTP app is local and the MCP transport uses stdio. To restrict developer queries to specific exercises, set `EXERCISE_REVIEW_API_EXERCISES` to a comma-separated list of allowed exercise IDs in both processes. An unset list allows all local published exercises.
+
 ## West Annex dock flow drill
 
 The setting and participants are fictional. Windows speech synthesis supplies the voices. The facilities track covers the full 15-minute drill with silences between radio transmissions. The 45-second secondary track deliberately has no known start time on the exercise clock. Both are mono, 16-bit PCM WAV at 16 kHz.

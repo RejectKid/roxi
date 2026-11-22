@@ -93,9 +93,9 @@ Use `/v1` for HTTP and map MCP tools to the same application operations. Define 
 | `GET /v1/exercises/{exercise_id}/revisions/latest` | `get_exercise_revision` | Exercise ID. Returns the current published revision ID, publication time, and source coverage summary. |
 | `GET /v1/exercises/{exercise_id}/revisions/{revision_id}/records` | `search_records` | Optional text, channel, capture window, cursor, and limit. Returns source matches, timestamps, and evidence references. Omit text for a source timeline. |
 | `GET /v1/exercises/{exercise_id}/revisions/{revision_id}/events` | `list_events` | Optional subject ID, event types, capture window, `as_of_ms`, review state, cursor, and limit. Returns matching events and eligible links, with evidence IDs and coverage. Defaults to accepted events. |
-| `GET /v1/exercises/{exercise_id}/revisions/{revision_id}/evidence/{evidence_id}` | `get_evidence` | Evidence ID. Returns excerpt, source name, capture timing, exact locator, and an authenticated playback or source-view reference. |
+| `GET /v1/exercises/{exercise_id}/revisions/{revision_id}/evidence/{evidence_id}` | `get_evidence` | Evidence ID. Returns excerpt, source name, capture timing, exact locator, and relative paths for original source access and radio playback. |
 
-Every successful query result includes the exercise and revision IDs. Use a default page size of 25 and cap it at 100. Sort by capture position then stable ID, with unknown times last. Pagination cursors bind to the revision and filter set. Time windows use an inclusive start and exclusive end. For an `as_of_ms` query, include an event or link only when its supporting evidence needed for that finding was captured at or before the cutoff. A bounded timing estimate qualifies when its upper bound is at or before the cutoff. Report excluded uncertain times and known coverage gaps. An as-of result describes what the imported record contained by that time, with review decisions pinned to the selected revision. Include incoming and outgoing eligible links for matching events so a correction is visible even when it changed the subject used in the filter. Include the linked event ID, type, and subject in the relationship result.
+Every successful query result includes the exercise and revision IDs. Revision numbers are positive integers within each exercise. Use a default page size of 25 and cap it at 100. Sort by capture position then stable ID, with unknown times last. Pagination cursors bind to the revision and filter set. Time windows use an inclusive start and exclusive end. For an `as_of_ms` query, include an event or link only when its supporting evidence needed for that finding was captured at or before the cutoff. A bounded timing estimate qualifies when its upper bound is at or before the cutoff. Report excluded uncertain times and known coverage gaps. An as-of result describes what the imported record contained by that time, with review decisions pinned to the selected revision. Include incoming and outgoing eligible links for matching events so a correction is visible even when it changed the subject used in the filter. Include the linked event ID, type, and subject in the relationship result.
 
 The reviewer interface uses authenticated application operations to create exercises, upload sources, inspect jobs, edit transcripts, review events and links, and publish revisions. These write operations are available to authorized human users through the review app. A valid query with zero matches returns an empty collection and coverage metadata. Use error results with a stable code, message, request ID, and retryability flag.
 
@@ -117,10 +117,10 @@ A radio recording contains “Bay three is OOS” at 02:04. At 02:29 the chat lo
 ```json
 {
   "exercise_id": "drill-01",
-  "revision_id": "rev-02",
+  "revision_id": 2,
   "items": [
     {
-      "event_id": "event-18",
+      "event_id": 6,
       "event_type": "correction",
       "subject_id": "bay-2",
       "capture_offset_ms": 149000,
@@ -128,12 +128,13 @@ A radio recording contains “Bay three is OOS” at 02:04. At 02:29 the chat lo
       "review_state": "accepted",
       "payload": {"replacement_subject_id": "bay-2", "replacement_reported_status": "out_of_service"},
       "relationships": [
-        {"type": "corrects", "direction": "outgoing", "event_id": "event-12", "event_type": "status_report", "subject_id": "bay-3", "evidence_ids": ["ev-radio-07", "ev-chat-11"]}
+        {"type": "corrects", "direction": "outgoing", "event_id": 5, "event_type": "status_report", "subject_id": "bay-3", "review_state": "accepted", "evidence_ids": ["s1-r6-tf80b3d5c3c2eadd559c6bfd69ccd35934de4667b2b8a2b57298ddcb1639d30fe", "s3-r7"]}
       ],
-      "evidence_ids": ["ev-chat-11"]
+      "evidence_ids": ["s3-r7"],
+      "conflicting_event_ids": []
     }
   ],
-  "coverage": {"aligned_sources": 2, "unaligned_sources": 1, "known_gaps": ["secondary-radio clock anchor missing"]},
+  "coverage": {"aligned_sources": 2, "unaligned_sources": 1, "known_gaps": ["dispatch: 1 malformed chat line skipped", "secondary-radio: exercise clock anchor missing"], "unknown_time_excluded": 0},
   "next_cursor": null
 }
 ```
