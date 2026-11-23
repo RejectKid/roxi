@@ -1,0 +1,6 @@
+{
+  "subjects": [
+    {"subject_id":"dock-runner","label":"Dock Runner","aliases":["North Shuttle"]},
+    {"subject_id":"yard-runner","label":"Yard Runner"}
+  ]
+}

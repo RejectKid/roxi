@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "features": [{
+    "type": "Feature",
+    "geometry": {"type":"Point","coordinates":[-84.2017,39.7516]},
+    "properties": {
+      "station": "KWA1",
+      "timestamp": "2026-11-22T15:02:00Z",
+      "temperature": {"value":5.5,"unitCode":"wmoUnit:degC"},
+      "windSpeed": {"value":7,"unitCode":"wmoUnit:km_h-1"}
+    }
+  }]
+}

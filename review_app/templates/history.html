@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Map and history · {{ exercise.name }}{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="/static/history.css">
+<script type="module" src="/static/history.js"></script>
+{% endblock %}
+{% macro stamp(value) -%}
+  {% if value %}<time datetime="{{ value.isoformat() }}">{{ value.isoformat(sep=' ', timespec='milliseconds') }}</time>
+  {% else %}Time unknown{% endif %}
+{%- endmacro %}
+{% block content %}
+<main class="frame workspace">
+  <h1>Map and history</h1>
+  <p class="subtitle">{{ exercise.name }}</p>
+  <form class="panel history-filters" method="get">
+    <label>Observed through
+      <input name="as_of" value="{{ as_of.isoformat() if as_of else '' }}" placeholder="YYYY-MM-DDTHH:MM:SSZ" aria-describedby="history-clock-hint">
+    </label>
+    <label>Known by
+      <input name="known_at" value="{{ known_filter.isoformat() if known_filter else '' }}" placeholder="Latest available" aria-describedby="history-clock-hint">
+    </label>
+    <button type="submit">Apply cutoffs</button>
+    <a href="/exercises/{{ exercise.id }}/history">Clear</a>
+    <p id="history-clock-hint">Use ISO timestamps with a UTC offset. “Known by” includes the time Roxi finished processing each observation.</p>
+  </form>
+  <div class="history-grid">
+    <section class="panel history-panel" aria-labelledby="history-map-title">
+      <h2 id="history-map-title">Facility map</h2>
+      <div class="history-map" data-history-map>
+        <canvas aria-label="Offline map of versioned facility layers and reported positions"></canvas>
+        <div class="history-markers" data-map-markers></div>
+        {% if not layers and not map_data.points %}<p class="map-empty">No mapped evidence at these cutoffs.</p>{% endif %}
+      </div>
+      <script type="application/json" id="history-map-data">{{ map_data | tojson }}</script>
+      {% if map_data.points %}
+      <p class="history-note">Select a marker to find its timeline entry. Reports without coordinates appear in the timeline.</p>
+      <ul class="history-map-key" aria-label="Map markers">
+        {% for kind, label in [('site','Facility'), ('vehicle_observation','Fleet observation'), ('weather_observation','Weather station')] %}
+        {% if map_data.points | selectattr('kind', 'equalto', kind) | list %}
+        <li class="{{ kind }}">{{ label }}</li>
+        {% endif %}
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if layers %}
+      <h3>Map layers</h3>
+      <ul class="history-layer-list">
+        {% for layer in layers %}
+        <li><a href="{{ layer.original_url }}">{{ layer.label }} · v{{ layer.version }}</a>
+          <span class="history-note">Effective {{ stamp(layer.effective_at) }}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+    <section class="panel history-panel" aria-labelledby="history-list-title">
+      <h2 id="history-list-title">Observation timeline</h2>
+      <p class="history-note">Known by {{ stamp(known_at) }} · <a href="{{ pinned_url }}">Open pinned view</a></p>
+      {% if registry %}
+      <p class="history-note"><a href="{{ registry.original_url }}">Reviewed aliases · v{{ registry.version }}</a>
+        · {{ registry.reviewer }}</p>
+      {% else %}
+      <p class="history-note">No reviewed aliases were available at this cutoff.</p>
+      {% endif %}
+      {% if untimed_excluded %}<p class="history-note">{{ untimed_excluded }} report(s) excluded because observation time is unknown.</p>{% endif %}
+      {% if truncated %}<p class="history-note">Showing the newest 250 observations at these cutoffs.</p>{% endif %}
+      <ol class="history-records">
+        {% for row in observations %}
+        <li id="{{ row.key }}" tabindex="-1">
+          <div class="history-tags">
+            <span>{{ row.kind | replace('_', ' ') | title }}</span>
+            {% if row.late %}<strong>Late arrival</strong>{% endif %}
+            {% if row.conflicts %}<strong>Conflicting status</strong>{% endif %}
+          </div>
+          <h3>{{ row.label }}</h3>
+          {% if row.entity %}<p>Matched to {{ row.entity.label }}</p>
+          {% elif row.candidates %}<p>Unresolved alias · Candidates: {{ row.candidates | map(attribute='label') | join(', ') }}</p>
+          {% else %}<p>Unresolved identity</p>{% endif %}
+          <p class="history-note">Observed {{ stamp(row.observed_at) }} <span>·</span> Received {{ stamp(row.received_at) }}</p>
+          <p>{{ row.source_key }}{% if row.reported_status %} · {{ row.reported_status | replace('_', ' ') }}{% endif %}</p>
+          {% if row.data.temperature and row.data.temperature.value is not none %}
+          <p>Temperature {{ row.data.temperature.value }} {{ row.data.temperature.unitCode | replace('wmoUnit:', '') }}</p>
+          {% endif %}
+          {% if row.conflicts %}
+          <p>{% for peer in row.conflicts %}<a href="#{{ peer }}">View conflicting evidence</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+          {% endif %}
+          <p class="history-evidence">
+            <a href="{{ row.evidence.detail_url }}">Inspect evidence</a>
+            <a href="{{ row.evidence.original_url }}">Original payload</a>
+            <code>{% if row.evidence.locator.kind == 'csv_row' %}CSV row {% endif %}{{ row.evidence.locator.value }}</code>
+          </p>
+        </li>
+        {% else %}
+        <li class="history-note">No observations match these cutoffs.</li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+</main>
+{% endblock %}

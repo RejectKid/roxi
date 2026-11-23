@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "reviewer": "West Annex fixture reviewer",
+  "entities": [
+    {"id":"west-annex-van","label":"West Annex delivery van 12","kind":"asset"},
+    {"id":"yard-cart","label":"Yard utility cart","kind":"asset"},
+    {"id":"west-annex-site","label":"West Annex receiving","kind":"site"}
+  ],
+  "aliases": [
+    {"source":"catalog:assets","external_id":"wa-unit-12","entities":["west-annex-van"]},
+    {"source":"catalog:fleet","external_id":"van-12","entities":["west-annex-van"]},
+    {"source":"chat:receiving-dock","external_id":"dock-runner","entities":["west-annex-van"]},
+    {"source":"chat:receiving-dock","external_id":"yard-runner","entities":["west-annex-van","yard-cart"]},
+    {"source":"catalog:sites","external_id":"west-annex","entities":["west-annex-site"]},
+    {"source":"catalog:weather","external_id":"KWA1","entities":["west-annex-site"]}
+  ]
+}

@@ -89,18 +89,22 @@ def receive(exercise_id: str, room_key: str, message: ChatMessage, original: byt
             return {"id": existing["id"], "duplicate": True}
 
         previous = conn.execute(
-            "SELECT sender, sent_ms FROM live_chat_version WHERE exercise_id = %s AND message_id = %s LIMIT 1", key,
+            "SELECT sender, sent_ms, sent_at_utc FROM live_chat_version WHERE exercise_id = %s AND message_id = %s LIMIT 1", key,
         ).fetchone()
         if previous and (previous["sender"], previous["sent_ms"]) != (message.sender, message.sent_ms):
             raise LiveError(409, "An edit must preserve the message sender and original send time.")
+        sent_at = previous["sent_at_utc"] if previous else conn.execute(
+            "SELECT started_at_utc + %s * interval '1 millisecond' AS sent_at FROM exercise WHERE id = %s",
+            (message.sent_ms, exercise_id),
+        ).fetchone()["sent_at"]
         received = conn.execute(
             """
             INSERT INTO live_chat_version
-                (exercise_id, message_id, version, sent_ms, sender, body, original, payload_sha256, late)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (exercise_id, message_id, version, sent_ms, sent_at_utc, sender, body, original, payload_sha256, late)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (*key, message.version, message.sent_ms, message.sender, message.text, original, digest,
+            (*key, message.version, message.sent_ms, sent_at, message.sender, message.text, original, digest,
              previous is None and message.sent_ms < room["watermark_ms"]),
         ).fetchone()
         if message.sent_ms > room["watermark_ms"]:

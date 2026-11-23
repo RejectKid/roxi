@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, ValidationError
 
 from .importer import Slug
 
@@ -20,6 +20,7 @@ Label = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, ma
 Latitude = Annotated[float, Field(ge=-90, le=90, allow_inf_nan=False)]
 Longitude = Annotated[float, Field(ge=-180, le=180, allow_inf_nan=False)]
 NonnegativeSpeed = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+GeographicPoint = TypeAdapter(tuple[Longitude, Latitude], config=ConfigDict(strict=True))
 
 
 @dataclass(frozen=True)
@@ -219,7 +220,7 @@ def fleet(payload: bytes, version: int) -> Parsed:
     return json_records(document["vehicles"], "/vehicles", normalize)
 
 
-def weather(payload: bytes, _version: int) -> Parsed:
+def weather(payload: bytes, version: int) -> Parsed:
     document = read_json(payload)
     if not document or document.get("type") != "FeatureCollection" or not isinstance(document.get("features"), list):
         return Parsed([], [Issue("invalid_envelope", "Expected an NWS observation FeatureCollection.",
@@ -239,6 +240,17 @@ def weather(payload: bytes, _version: int) -> Parsed:
             if reading is None or reading.value is None:
                 gaps.append(Issue("missing_measurement", f"{field} was unavailable.",
                                   Locator("json_pointer", f"{locator.value}/properties/{field}")))
+        if version == 2 and value.get("geometry") is not None:
+            shape = value["geometry"]
+            coordinates = shape.get("coordinates") if isinstance(shape, dict) and shape.get("type") == "Point" else None
+            try:
+                if not isinstance(coordinates, list) or len(coordinates) not in {2, 3}:
+                    raise ValueError("Expected a point with longitude and latitude.")
+                longitude, latitude = GeographicPoint.validate_python(tuple(coordinates[:2]))
+                data.update(longitude=longitude, latitude=latitude)
+            except ValueError:
+                gaps.append(Issue("invalid_position", "The station position was invalid.",
+                                  Locator("json_pointer", f"{locator.value}/geometry")))
         key = f"{station}@{item.timestamp.timestamp()}"
         return Record(key, station, "weather_observation", item.timestamp, data, locator), gaps
 
@@ -250,6 +262,6 @@ ADAPTERS = {
         Adapter("assets-csv", "roxi.assets-csv/v1", (1,), lambda data, _: csv_rows(data, AssetRow, "asset_id", "asset")),
         Adapter("sites-csv", "roxi.sites-csv/v1", (1,), lambda data, _: csv_rows(data, SiteRow, "site_id", "site")),
         Adapter("civilian-fleet", "roxi.civilian-fleet/v1", (1, 2), fleet),
-        Adapter("nws-observations", "nws.observation-geojson/v1", (1,), weather),
+        Adapter("nws-observations", "nws.observation-geojson/v1", (1, 2), weather),
     )
 }

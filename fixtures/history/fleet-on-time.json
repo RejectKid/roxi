@@ -1,0 +1,7 @@
+{
+  "schema": "roxi.civilian-fleet/v1",
+  "vehicles": [
+    {"vehicle_id":"van-12","observed_at":"2026-11-22T15:01:00Z","latitude":39.7502,"longitude":-84.2010,"status":"parked","speed_mph":0},
+    {"vehicle_id":"van-12","observed_at":"2026-11-22T15:08:00Z","latitude":39.7515,"longitude":-84.1975,"status":"parked","speed_mph":0}
+  ]
+}

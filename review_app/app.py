@@ -11,6 +11,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from . import query_service
 from .assistant_routes import router as assistant_router
 from .extraction import subjects
+from .history_registry import HistoryError
+from .history_routes import router as history_router
 from .live_chat import LiveError, registered_room
 from .live_routes import router as live_router
 from .query_routes import router as query_router
@@ -29,12 +31,14 @@ app.include_router(query_router)
 app.include_router(assistant_router)
 app.include_router(live_router)
 app.include_router(source_router)
+app.include_router(history_router)
 
 
 @app.exception_handler(ReviewError)
 @app.exception_handler(LiveError)
 @app.exception_handler(CatalogError)
-async def review_error(_request: Request, error: ReviewError | LiveError | CatalogError):
+@app.exception_handler(HistoryError)
+async def review_error(_request: Request, error: ReviewError | LiveError | CatalogError | HistoryError):
     return JSONResponse({"detail": error.detail}, status_code=error.status)
 
 

@@ -4,3 +4,5 @@
 *.json text eol=lf
 *.ps1 text eol=lf
 *.wav binary
+/fixtures/history/*.csv text eol=lf
+/fixtures/history/*.geojson text eol=lf

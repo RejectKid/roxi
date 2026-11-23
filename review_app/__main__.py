@@ -4,12 +4,14 @@ from dataclasses import asdict
 from pathlib import Path
 
 import psycopg
-from pydantic import TypeAdapter
+from pydantic import AwareDatetime, TypeAdapter
 
+from .history_registry import HistoryError, Version, load_layer, load_registry
 from .importer import Slug, import_exercise
 from .live_chat import LiveError, register_room, work
 from .live_export import export_snapshot
 from . import source_catalog
+from .source_adapters import Label
 from .storage import migrate
 
 
@@ -54,6 +56,18 @@ def main() -> None:
         if name == "replay":
             action.add_argument("capture_id", type=int)
             action.add_argument("--parser-version", type=int, required=True)
+    history = commands.add_parser("history", help="Publish reviewed entity aliases and offline map layers.")
+    history_commands = history.add_subparsers(dest="history_command", required=True)
+    registry = history_commands.add_parser("registry", help="Publish a reviewed registry JSON revision.")
+    registry.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
+    registry.add_argument("file", type=Path)
+    layer = history_commands.add_parser("layer", help="Publish a versioned local GeoJSON layer.")
+    layer.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
+    layer.add_argument("key", type=TypeAdapter(Slug).validate_python)
+    layer.add_argument("version", type=TypeAdapter(Version).validate_python)
+    layer.add_argument("effective_at", type=TypeAdapter(AwareDatetime).validate_python)
+    layer.add_argument("file", type=Path)
+    layer.add_argument("--label", type=TypeAdapter(Label).validate_python, required=True)
     args = parser.parse_args()
 
     try:
@@ -75,13 +89,17 @@ def main() -> None:
             print(f"Exported {count} messages to {args.output}.")
         elif args.command == "sources":
             run_source_command(args)
+        elif args.command == "history":
+            receipt = (load_registry(args.exercise, args.file) if args.history_command == "registry"
+                       else load_layer(args.exercise, args.key, args.version, args.label, args.effective_at, args.file))
+            print(json.dumps(receipt, default=lambda value: value.isoformat()))
         else:
             from .transcription import build_bundle
 
             report = build_bundle(args.manifest, args.output, model_name=args.model, language=args.language,
                                   exercise_id=args.exercise_id, offline=args.offline)
             print(json.dumps(report, indent=2))
-    except (LiveError, source_catalog.CatalogError) as exc:
+    except (LiveError, source_catalog.CatalogError, HistoryError) as exc:
         parser.exit(1, f"{args.command} failed: {exc.detail}\n")
     except (OSError, ValueError, RuntimeError, psycopg.Error) as exc:
         parser.exit(1, f"{args.command} failed: {exc}\n")

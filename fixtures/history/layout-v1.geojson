@@ -1,0 +1,9 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {"type":"Feature","id":"receiving-yard","properties":{"label":"Receiving yard"},
+      "geometry":{"type":"Polygon","coordinates":[[[-84.2025,39.7490],[-84.1986,39.7490],[-84.1986,39.7513],[-84.2025,39.7513],[-84.2025,39.7490]]]}},
+    {"type":"Feature","id":"driveway","properties":{"label":"Receiving driveway"},
+      "geometry":{"type":"LineString","coordinates":[[-84.1980,39.7488],[-84.1980,39.7504],[-84.1974,39.7520]]}}
+  ]
+}

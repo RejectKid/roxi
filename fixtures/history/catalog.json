@@ -1,0 +1,6 @@
+[
+  {"source_key":"assets","label":"Asset register","adapter_key":"assets-csv","stale_after_seconds":2592000},
+  {"source_key":"sites","label":"Facility register","adapter_key":"sites-csv","stale_after_seconds":2592000},
+  {"source_key":"fleet","label":"Sandbox fleet","adapter_key":"civilian-fleet","stale_after_seconds":86400},
+  {"source_key":"weather","label":"Fictional weather observation","adapter_key":"nws-observations","stale_after_seconds":86400}
+]

@@ -1,0 +1,4 @@
+[
+  {"message_id":"shuttle-service","version":1,"sent_ms":180000,"sender":"dispatch","text":"North Shuttle is out of service."},
+  {"message_id":"runner-ambiguous","version":1,"sent_ms":240000,"sender":"yard","text":"Yard Runner is in service."}
+]

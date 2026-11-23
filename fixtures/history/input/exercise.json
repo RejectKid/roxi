@@ -1,0 +1,7 @@
+{
+  "exercise_id": "west-annex-history",
+  "name": "West Annex cross-source replay",
+  "started_at_utc": "2026-11-22T15:00:00Z",
+  "glossary_file": "glossary.json",
+  "sources": [{"source_key":"sandbox-opening","kind":"chat","file":"opening.irc","time_basis":"exercise_elapsed"}]
+}

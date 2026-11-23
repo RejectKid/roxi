@@ -18,7 +18,7 @@
       {% if exercise %}
       {% set exercise_path = '/exercises/' ~ exercise.id %}
       <nav class="site-nav" aria-label="Exercise">
-        {% for section, label, suffix in [('timeline', 'Timeline', ''), ('review', 'Review queue', '/review'), ('revisions', 'Revisions', '/revisions'), ('assistant', 'Assistant', '/assistant'), ('sources', 'Sources', '/sources')] %}
+        {% for section, label, suffix in [('timeline', 'Timeline', ''), ('review', 'Review queue', '/review'), ('revisions', 'Revisions', '/revisions'), ('assistant', 'Assistant', '/assistant'), ('sources', 'Sources', '/sources'), ('history', 'Map & history', '/history')] %}
         <a href="{{ exercise_path }}{{ suffix }}" {% if nav_section == section %}aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
       </nav>

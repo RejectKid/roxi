@@ -60,6 +60,8 @@ jobs:
         run: python tools/check_live_replay.py
       - name: Verify source catalog ingestion, outages, and replay
         run: python tools/check_source_catalog.py
+      - name: Verify cross-source history and map replay
+        run: python tools/check_history_view.py
       - name: Show database logs on failure
         if: failure()
         run: docker compose logs db

@@ -1,0 +1,14 @@
+{
+  "exercise_id": "west-annex-history",
+  "as_of": "2026-11-22T15:05:00Z",
+  "late_observation_at": "2026-11-22T15:03:00Z",
+  "late_locator": "/vehicles/0",
+  "canonical_van_id": "west-annex-van",
+  "alias_candidates": ["west-annex-van", "yard-cart"],
+  "conflicting_message_id": "shuttle-service",
+  "ambiguous_message_id": "runner-ambiguous",
+  "before_count": 6,
+  "after_count": 7,
+  "layer_versions": [1, 1, 2],
+  "registry_versions": [1, 1, 2]
+}
