@@ -39,7 +39,7 @@ Register the stdio server in a compatible client. Replace `C:\path\to\roxi` with
     "roxi": {
       "command": "C:\\path\\to\\roxi\\.venv\\Scripts\\python.exe",
       "args": ["-m", "review_app.mcp_server"],
-      "env": {"PYTHONPATH": "C:\\path\\to\\roxi"}
+      "env": {"PYTHONPATH": "C:\\path\\to\\roxi", "ROXI_ACCESS_MODE": "demo"}
     }
   }
 }
@@ -55,7 +55,8 @@ Register the stdio server in a compatible client. Replace `C:\path\to\roxi` with
 Use your returned `revision_id` and evidence IDs. MCP evidence returns an HTTP `original_path` relative to the running app. Audio also returns `playback_path` with the clip interval. Chat evidence includes the exact original text and its line number. To check all four tools against their HTTP equivalents, run this from the checkout.
 
 ```powershell
+$env:ROXI_ACCESS_MODE = 'demo'
 .venv/Scripts/python.exe tools/check_published_parity.py --exercise drill-01
 ```
 
-Both interfaces use the database reader role. Set `EXERCISE_REVIEW_API_EXERCISES` to a comma-separated list in the app and MCP environments to scope these interfaces. The default local configuration allows all imported exercises on the workstation.
+Both interfaces use the database reader role. Outside the synthetic demo, provide a workspace bearer token to HTTP and set `ROXI_ACCESS_TOKEN` in the MCP process. `EXERCISE_REVIEW_API_EXERCISES` optionally narrows their exercise scope further. [Pilot access setup](PILOT-OPERATIONS.md)

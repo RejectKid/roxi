@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapte
 from .importer import Slug
 from .live_chat import connect_editor
 from .source_adapters import ADAPTERS, CONTRACT_VERSION, MAX_PAYLOAD_BYTES, Label
-from .storage import archive_capture, archive_path, connect_read
+from .storage import archive_capture, archive_path, archive_writer, connect_read
 
 ITEM_LIMIT = 50
 
@@ -124,12 +124,13 @@ def derive(conn, capture_id, adapter, version, payload) -> dict:
     return {"state": parsed.state, "records": len(records), "issues": len(issues)}
 
 
+@archive_writer
 def ingest(exercise_id: str, source_key: str, name: str, data: bytes, version: int | None, channel: str) -> Receipt:
-    original = archive_capture(data)
     with connect_editor() as conn:
         source = registered(conn, exercise_id, source_key, lock=True)
         adapter = ADAPTERS[source["adapter_key"]]
         selected = adapter.select_version(version)
+        original = archive_capture(data)
         key = (exercise_id, source_key, original.sha256)
         conn.execute(
             """
@@ -401,7 +402,7 @@ def sandbox_source(conn, exercise_id, now):
              "capture_url": f"/exercises/{exercise_id}/live/evidence/{row['id']}" if row else None}]
 
 
-def catalog(exercise_id: str, now: datetime | None = None) -> dict:
+def catalog(exercise_id: str, now: datetime | None = None, *, allowed: frozenset[str] | None = None) -> dict:
     now = now or datetime.now(UTC)
     with connect_read() as conn:
         exercise = conn.execute("SELECT id, name FROM exercise WHERE id = %s", (exercise_id,)).fetchone()
@@ -410,9 +411,13 @@ def catalog(exercise_id: str, now: datetime | None = None) -> dict:
         configs = conn.execute(
             "SELECT * FROM catalog_source WHERE exercise_id = %s ORDER BY source_key", (exercise_id,),
         ).fetchall()
-        sources = [describe(conn, config, now) for config in configs]
-        return {"exercise": exercise, "checked_at": now, "sources": sources + sandbox_source(conn, exercise_id, now)
-                + recorded_sources(conn, exercise_id)}
+        sources = [describe(conn, config, now) for config in configs
+                   if allowed is None or f"catalog:{config['source_key']}" in allowed]
+        sources.extend(row for row in sandbox_source(conn, exercise_id, now)
+                       if allowed is None or f"chat:{row['source_key']}" in allowed)
+        sources.extend(row for row in recorded_sources(conn, exercise_id)
+                       if allowed is None or f"recorded:{row['source_key']}" in allowed)
+        return {"exercise": exercise, "checked_at": now, "sources": sources}
 
 
 def capture_details(exercise_id: str, source_key: str, capture_id: int) -> dict:

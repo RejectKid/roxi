@@ -1,14 +1,12 @@
 import json
-import os
 import re
-import sys
 
-from mcp import Client, StdioServerParameters
+from mcp import Client
 
 from .chat_types import Claim, Verdict
 from .extraction import subject_entries
+from .mcp_server import create_server
 from .query_models import EventPage, EvidenceResult
-from .storage import ROOT
 
 STATUS_PATTERNS = {
     "out_of_service": re.compile(r"\b(?:oos|out of service|not in service|closed for returns)\b", re.I),
@@ -165,15 +163,10 @@ def evaluate_claim(claim: Claim, main: dict[str, EvidenceResult], coverage: dict
 
 
 async def verify_claim(claim: Claim) -> tuple[Verdict, list[EvidenceResult]]:
-    server = StdioServerParameters(
-        command=sys.executable, args=["-m", "review_app.mcp_server"], cwd=ROOT,
-        env={key: os.environ[key] for key in ("EXERCISE_REVIEW_READER_URL", "EXERCISE_REVIEW_ARCHIVE",
-                                               "EXERCISE_REVIEW_API_EXERCISES") if key in os.environ},
-    )
     pin = {"exercise_id": claim.exercise_id, "revision_id": claim.revision_id}
     main, coverage = {}, {}
     try:
-        async with Client(server, read_timeout_seconds=10) as client:
+        async with Client(create_server(), read_timeout_seconds=10, cache=None) as client:
             try:
                 for ids, destination in ((claim.evidence_ids, main), (claim.coverage_evidence_ids, coverage)):
                     for key in dict.fromkeys(ids):

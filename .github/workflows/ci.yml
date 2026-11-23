@@ -64,6 +64,15 @@ jobs:
         run: python tools/check_history_view.py
       - name: Verify history assistant, HTTP and MCP parity, and subscription resume
         run: python tools/check_history_interfaces.py
+      - name: Verify pilot access, retention, and backup restore
+        run: |
+          docker compose exec -T db createdb -U review_owner roxi_pilot_ci
+          docker compose exec -T db createdb -U review_owner roxi_restore_ci
+          export EXERCISE_REVIEW_DATABASE_URL=postgresql://review_owner:review-local-owner@127.0.0.1:55432/roxi_pilot_ci
+          export EXERCISE_REVIEW_EDITOR_URL=postgresql://review_editor:review-local-editor@127.0.0.1:55432/roxi_pilot_ci
+          export EXERCISE_REVIEW_READER_URL=postgresql://review_reader:review-local-reader@127.0.0.1:55432/roxi_pilot_ci
+          export ROXI_RESTORE_DATABASE_URL=postgresql://review_owner:review-local-owner@127.0.0.1:55432/roxi_restore_ci
+          python tools/check_pilot_operations.py
       - name: Show database logs on failure
         if: failure()
         run: docker compose logs db

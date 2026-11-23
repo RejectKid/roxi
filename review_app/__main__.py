@@ -11,6 +11,7 @@ from .importer import Slug, import_exercise
 from .live_chat import LiveError, register_room, work
 from .live_export import export_snapshot
 from . import source_catalog
+from . import pilot_admin
 from .source_adapters import Label
 from .storage import migrate
 
@@ -68,6 +69,7 @@ def main() -> None:
     layer.add_argument("effective_at", type=TypeAdapter(AwareDatetime).validate_python)
     layer.add_argument("file", type=Path)
     layer.add_argument("--label", type=TypeAdapter(Label).validate_python, required=True)
+    pilot_admin.add_commands(commands)
     args = parser.parse_args()
 
     try:
@@ -93,6 +95,9 @@ def main() -> None:
             receipt = (load_registry(args.exercise, args.file) if args.history_command == "registry"
                        else load_layer(args.exercise, args.key, args.version, args.label, args.effective_at, args.file))
             print(json.dumps(receipt, default=lambda value: value.isoformat()))
+        elif args.command == "pilot":
+            result = pilot_admin.run(args)
+            print(result if isinstance(result, str) else json.dumps(result, default=str, indent=2))
         else:
             from .transcription import build_bundle
 

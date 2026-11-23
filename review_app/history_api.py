@@ -7,12 +7,13 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 
 from . import history_models as model
 from . import history_query as service
+from . import pilot_access as access
 from .history_changes import list_changes, resume_token
 from .history_view import HistoryFilters, view
 from .history_voice import receive_question
 from .importer import Slug
 from .query_routes import ERRORS
-from .query_service import check_scope
+from .query_service import QueryError
 from .review_routes import require_local_json
 from .views import templates
 
@@ -60,19 +61,22 @@ async def history_stream(
                 if idle >= 30:
                     yield ": heartbeat\n\n"
                     idle = 0
-            page = await asyncio.to_thread(list_changes, model.ChangeRequest(exercise_id=exercise_id,
-                                                                             after=page.resume_token, limit=64))
+            try:
+                page = await asyncio.to_thread(list_changes, model.ChangeRequest(exercise_id=exercise_id,
+                                                                                 after=page.resume_token, limit=64))
+            except QueryError:
+                return
     return StreamingResponse(events(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
 
 
 @router.get("/exercises/{exercise_id}/history/assistant", response_class=HTMLResponse)
 def assistant_page(request: Request, exercise_id: Slug, filters: Annotated[HistoryFilters, Query()]):
-    check_scope(exercise_id)
-    snapshot = view(exercise_id, filters)
+    grant = access.require(exercise_id, full=False)
+    snapshot = view(exercise_id, filters, grant.sources)
     return templates.TemplateResponse(request, "history_assistant.html", {
         "exercise": snapshot["exercise"], "known_at": snapshot["known_at"], "as_of": snapshot["as_of"],
-        "nav_section": "assistant",
+        "nav_section": "assistant", "grant": grant,
     })
 
 
@@ -84,5 +88,5 @@ def history_answer(request: Request, exercise_id: Slug, question: model.Question
 
 @router.post("/exercises/{exercise_id}/history/voice")
 async def history_voice(request: Request, exercise_id: Slug) -> model.VoiceTranscript:
-    check_scope(exercise_id)
+    await asyncio.to_thread(access.require, exercise_id, full=False)
     return model.VoiceTranscript(question=await receive_question(request))

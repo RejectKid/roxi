@@ -37,6 +37,7 @@ def draft_answer(pin: model.RevisionRequest, question: str):
 @router.post("/ask")
 async def ask(request: Request, exercise_id: model.Slug, data: ChatRequest) -> ChatResponse:
     require_local_json(request)
+    service.check_scope(exercise_id)
     pin = model.RevisionRequest(exercise_id=exercise_id, revision_id=data.revision_id)
     text, claim, parser = await asyncio.to_thread(draft_answer, pin, data.question)
     verdict, citations = await verify_claim(claim)

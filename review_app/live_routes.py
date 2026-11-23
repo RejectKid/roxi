@@ -10,10 +10,10 @@ from psycopg.rows import dict_row
 from pydantic import Field, ValidationError
 
 from . import live_chat as live
+from . import pilot_access as access
 from .importer import Slug
-from .query_service import check_scope
 from .review_routes import require_local_json
-from .storage import READER_DSN
+from .storage import READER_DSN, connect_read
 from .views import templates
 
 router = APIRouter(prefix="/exercises/{exercise_id}/live", tags=["Sandbox chat"])
@@ -27,13 +27,15 @@ async def receive_message(
     sandbox_token: Annotated[str, Header(alias="X-Roxi-Sandbox-Token")] = "",
 ):
     require_local_json(request)
-    if not request.client or request.client.host not in {"127.0.0.1", "::1"}:
-        raise HTTPException(403, "The sandbox webhook is available on loopback only.")
-    configured = os.environ.get("ROXI_SANDBOX_TOKEN")
-    if not configured:
-        raise HTTPException(503, "Set ROXI_SANDBOX_TOKEN to enable sandbox messages.")
-    if not compare_digest(configured.encode(), sandbox_token.encode()):
-        raise HTTPException(401, "The sandbox token is missing or invalid.")
+    if access.demo():
+        configured = os.environ.get("ROXI_SANDBOX_TOKEN")
+        if not configured:
+            raise HTTPException(503, "Set ROXI_SANDBOX_TOKEN to enable sandbox messages.")
+        if not compare_digest(configured.encode(), sandbox_token.encode()):
+            raise HTTPException(401, "The sandbox token is missing or invalid.")
+        await asyncio.to_thread(access.require, exercise_id)
+    else:
+        await asyncio.to_thread(access.require_ingest, exercise_id, f"chat:{room_key}")
 
     original = bytearray()
     async for chunk in request.stream():
@@ -44,7 +46,11 @@ async def receive_message(
         message = live.ChatMessage.model_validate_json(original)
     except ValidationError:
         raise HTTPException(422, "Supply message_id, version, sent_ms, sender, and nonblank single-line text.") from None
-    receipt = await asyncio.to_thread(live.receive, exercise_id, room_key, message, bytes(original))
+    def ingest():
+        if not access.demo():
+            access.require_ingest(exercise_id, f"chat:{room_key}")
+        return live.receive(exercise_id, room_key, message, bytes(original))
+    receipt = await asyncio.to_thread(ingest)
     return JSONResponse(receipt, status_code=200 if receipt["duplicate"] else 202)
 
 
@@ -56,12 +62,23 @@ def read_changes(conn, exercise_id: str, cursor: int) -> list[dict]:
     ).fetchall()
 
 
+def room_access(exercise_id: str) -> access.Grant:
+    access.require(exercise_id, full=False)
+    with connect_read() as conn:
+        room_key = live.room_for(conn, exercise_id)["room_key"]
+    return access.require(exercise_id, full=False, source=f"chat:{room_key}")
+
+
 async def changes(exercise_id: str, cursor: int):
     conn = await asyncio.to_thread(psycopg.connect, READER_DSN, connect_timeout=5,
                                    autocommit=True, row_factory=dict_row)
     try:
         quiet = 0
         while True:
+            try:
+                await asyncio.to_thread(room_access, exercise_id)
+            except (access.AccessError, live.LiveError):
+                return
             rows = await asyncio.to_thread(read_changes, conn, exercise_id, cursor)
             if rows:
                 cursor = rows[-1]["change_seq"]
@@ -81,6 +98,7 @@ async def changes(exercise_id: str, cursor: int):
 async def stream(
     exercise_id: Slug, last_event_id: Annotated[str, Header(max_length=19)] = "",
 ):
+    await asyncio.to_thread(room_access, exercise_id)
     seq, items = await asyncio.to_thread(live.snapshot, exercise_id)
     resume = last_event_id.isascii() and last_event_id.isdecimal() and int(last_event_id) <= seq
 
@@ -99,15 +117,15 @@ async def stream(
 
 @router.get("/evidence/{item_id}", response_class=HTMLResponse)
 def evidence_page(request: Request, exercise_id: Slug, item_id: ItemId):
-    check_scope(exercise_id)
+    grant = room_access(exercise_id)
     exercise, record, history = live.original_evidence(exercise_id, item_id)
     return templates.TemplateResponse(request, "live_evidence.html", {
-        "exercise": exercise, "record": record, "history": history, "nav_section": "timeline",
+        "exercise": exercise, "record": record, "history": history, "nav_section": "timeline", "grant": grant,
     })
 
 
 @router.get("/evidence/{item_id}/original")
 def original_message(exercise_id: Slug, item_id: ItemId):
-    check_scope(exercise_id)
+    room_access(exercise_id)
     _, record, _ = live.original_evidence(exercise_id, item_id)
     return Response(record["original"], media_type="application/json", headers={"X-Content-Type-Options": "nosniff"})

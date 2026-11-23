@@ -80,7 +80,7 @@ For Codex, run this from the Roxi checkout:
 
 ```powershell
 $python = (Resolve-Path .venv/Scripts/python.exe).Path
-codex mcp add roxi --env "PYTHONPATH=$((Get-Location).Path)" --env "EXERCISE_REVIEW_API_EXERCISES=west-annex-history" -- $python -m review_app.mcp_server
+codex mcp add roxi --env "PYTHONPATH=$((Get-Location).Path)" --env "ROXI_ACCESS_MODE=demo" --env "EXERCISE_REVIEW_API_EXERCISES=west-annex-history" -- $python -m review_app.mcp_server
 ```
 
 For OpenCode, add this entry to the project's `opencode.json` and replace the example paths with the Roxi checkout and its Python executable. Confirm the connection with `opencode mcp list`. [OpenCode MCP configuration](https://opencode.ai/docs/mcp-servers/)
@@ -93,6 +93,7 @@ For OpenCode, add this entry to the project's `opencode.json` and replace the ex
       "command": ["C:/path/to/roxi/.venv/Scripts/python.exe", "-m", "review_app.mcp_server"],
       "environment": {
         "PYTHONPATH": "C:/path/to/roxi",
+        "ROXI_ACCESS_MODE": "demo",
         "EXERCISE_REVIEW_API_EXERCISES": "west-annex-history"
       }
     }

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Roxi{% endblock %}
+{% block content %}
+<main class="frame workspace">
+  <h1>Sign in to Roxi</h1>
+  <form class="panel pilot-sign-in" method="post" action="/login">
+    {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" required maxlength="80">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256">
+    <button type="submit">Sign in</button>
+  </form>
+</main>
+{% endblock %}

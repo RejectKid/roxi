@@ -9,6 +9,7 @@ from .importer import Slug
 from .storage import archive_path
 
 ERRORS = {
+    401: {"model": model.ErrorResult, "description": "Workspace sign-in or access token required"},
     400: {"model": model.ErrorResult, "description": "Invalid request or cursor"},
     404: {"model": model.ErrorResult, "description": "Published revision or evidence not found"},
     503: {"model": model.ErrorResult, "description": "Database temporarily unavailable"},

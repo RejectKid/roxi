@@ -8,21 +8,21 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from . import history_models as model
+from . import pilot_access as access
 from . import query_service as query
 from .history_registry import HistoryError, Registry
-from .history_view import HistoryFilters, view
+from .history_view import HistoryFilters, source_keys, view
 from .source_catalog import read_bounded
 from .storage import archive_path, connect_read
 
 STATUS = {"in_service": "in service", "out_of_service": "out of service", "unknown": "status unknown"}
 
 
-def pinned_view(request: model.HistoryPin) -> dict:
-    query.check_scope(request.exercise_id)
+def pinned_view(request: model.HistoryPin, sources: frozenset[str] | None) -> dict:
     if request.known_at > datetime.now(UTC):
         raise query.invalid("The known-by cutoff must be in the past or present.")
     try:
-        snapshot = view(request.exercise_id, HistoryFilters(as_of=request.as_of, known_at=request.known_at))
+        snapshot = view(request.exercise_id, HistoryFilters(as_of=request.as_of, known_at=request.known_at), sources)
     except HistoryError:
         raise query.not_found("Exercise history not found.") from None
     for row in snapshot["observations"]:
@@ -53,7 +53,7 @@ def summary(row: dict) -> str:
     return text
 
 
-def config_at(conn, request: model.HistoryPin) -> list[dict]:
+def config_at(conn, request: model.HistoryPin, sources: frozenset[str] | None) -> list[dict]:
     return conn.execute(
         """
         SELECT source.source_key, source.label, source.stale_after_seconds, source.expected_ids,
@@ -69,9 +69,10 @@ def config_at(conn, request: model.HistoryPin) -> list[dict]:
             ORDER BY parser_version DESC LIMIT 1
         ) AS derived ON true
         WHERE source.exercise_id = %(exercise)s AND source.registered_at <= %(known)s
+          AND (%(allowed)s::text[] IS NULL OR source.source_key = ANY(%(allowed)s))
         ORDER BY source.source_key
         """,
-        {"exercise": request.exercise_id, "known": request.known_at},
+        {"exercise": request.exercise_id, "known": request.known_at, "allowed": source_keys(sources, "catalog")},
     ).fetchall()
 
 
@@ -243,7 +244,8 @@ def record_matches(row: dict, excerpt: dict) -> bool:
 
 
 def open_evidence(request: model.EvidenceRequest) -> model.OpenHistoryEvidence:
-    snapshot = pinned_view(request)
+    grant = access.require(request.exercise_id, full=False)
+    snapshot = pinned_view(request, grant.sources)
     row = next((row for row in snapshot["observations"] if row["key"] == request.key), None)
     if row is None:
         raise query.not_found("Evidence is not part of this pinned history view.")
@@ -256,7 +258,7 @@ def pin_from(request: model.HistoryQuery) -> model.HistoryPin:
 
 
 def candidates(request: model.HistoryQuery, pin: model.HistoryPin, rows: list[dict], groups: dict,
-               configs: list[dict], gaps: list[str]):
+               configs: list[dict], gaps: list[str], sources: frozenset[str] | None):
     if request.mode == "conflicts":
         for row, peer in matching_conflicts(rows, request.entity_id):
             yield "conflict", row, f"{summary(row)} {summary(peer)}", [(pin, row), (pin, peer)]
@@ -272,7 +274,7 @@ def candidates(request: model.HistoryQuery, pin: model.HistoryPin, rows: list[di
             gaps.append("Provide an earlier known-by cutoff to compare changes.")
             return
         baseline = model.HistoryPin(exercise_id=pin.exercise_id, as_of=pin.as_of, known_at=request.baseline_known_at)
-        previous = pinned_view(baseline)
+        previous = pinned_view(baseline, sources)
         old = {observation_identity(row): row for row in previous["observations"]}
         for row in rows:
             prior = old.pop(observation_identity(row), None)
@@ -293,17 +295,20 @@ def candidates(request: model.HistoryQuery, pin: model.HistoryPin, rows: list[di
 
 
 def query_history(request: model.HistoryQuery) -> model.HistoryResult:
+    grant = access.require(request.exercise_id, full=False)
     pin = pin_from(request)
-    snapshot = pinned_view(pin)
+    snapshot = pinned_view(pin, grant.sources)
     fingerprint = query.filter_fingerprint("history", request)
+    if grant.sources is not None:
+        fingerprint = hashlib.sha256(json.dumps([fingerprint, sorted(grant.sources)]).encode()).hexdigest()
     token = query.decode_cursor(request.cursor, fingerprint)
     offset = token[1] if token else 0
     if token and (token[0] or token[2:] != (0, 0)):
         raise query.invalid("Invalid history cursor.")
     with connect_read() as conn:
-        configs = config_at(conn, request)
+        configs = config_at(conn, request, grant.sources)
         groups, gaps = source_groups(snapshot, configs)
-        items = list(candidates(request, pin, snapshot["observations"], groups, configs, gaps))
+        items = list(candidates(request, pin, snapshot["observations"], groups, configs, gaps, grant.sources))
         if not items:
             gaps.append("No matching evidence-backed findings for these cutoffs and filters.")
         sources = Originals(conn)
@@ -337,10 +342,10 @@ def interpret(question: str) -> model.Mode | None:
 
 def answer(exercise_id: str, request: model.QuestionRequest) -> model.HistoryAnswer:
     mode = interpret(request.question)
-    query.check_scope(exercise_id)
     if mode is None:
+        grant = access.require(exercise_id, full=False)
         pin = model.HistoryPin(exercise_id=exercise_id, as_of=request.as_of, known_at=request.known_at)
-        pinned_view(pin)
+        pinned_view(pin, grant.sources)
         return model.HistoryAnswer(
             answer="Ask what was recorded, what changed, which reports disagree, or which sources are overdue.",
             result=model.HistoryResult(**pin.model_dump(), mode="snapshot", facts=[],

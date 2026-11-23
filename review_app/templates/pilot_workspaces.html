@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Workspaces · Roxi{% endblock %}
+{% block content %}
+<main class="frame workspace">
+  <h1>Workspaces</h1>
+  {% for workspace, entries in exercises|groupby('workspace_id') %}
+  <section class="panel pilot-workspace">
+    <h2>{{ entries[0].workspace }}</h2>
+    <ul>
+    {% for entry in entries %}
+      <li><strong>{{ entry.name }}</strong>{% if entry.closed_at %} <span>(closed)</span>{% endif %}
+        <a href="/exercises/{{ entry.id }}/sources">Sources</a>
+        <a href="/exercises/{{ entry.id }}/history/assistant">History assistant</a>
+        {% if entry.all_sources %}<a href="/exercises/{{ entry.id }}">Timeline</a>{% endif %}
+        {% if entry.role == 'admin' and entry.all_sources %}<a href="/exercises/{{ entry.id }}/operations">Connector health</a>{% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+  </section>
+  {% else %}
+  <p>No exercises are assigned to your account.</p>
+  {% endfor %}
+</main>
+{% endblock %}

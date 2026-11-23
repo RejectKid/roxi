@@ -18,6 +18,7 @@ Start the HTTP app with a sandbox token in its environment. Set the same value i
 
 ```powershell
 $env:ROXI_SANDBOX_TOKEN = '<choose a local sandbox token>'
+$env:ROXI_ACCESS_MODE = 'demo'
 .venv/Scripts/python.exe -m uvicorn review_app.app:app --host 127.0.0.1 --port 8000
 ```
 

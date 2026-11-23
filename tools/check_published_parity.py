@@ -13,7 +13,8 @@ from urllib.request import Request, urlopen
 from mcp import Client, StdioServerParameters
 
 ROOT = Path(__file__).resolve().parents[1]
-SERVER_ENV = ("EXERCISE_REVIEW_READER_URL", "EXERCISE_REVIEW_API_EXERCISES", "EXERCISE_REVIEW_ARCHIVE")
+SERVER_ENV = ("EXERCISE_REVIEW_READER_URL", "EXERCISE_REVIEW_API_EXERCISES", "EXERCISE_REVIEW_ARCHIVE",
+              "ROXI_ACCESS_MODE", "ROXI_ACCESS_TOKEN")
 
 
 def http_json(base: str, path: str, params: dict) -> dict:

@@ -86,7 +86,21 @@ def wait_ready(base: str, thread: Thread) -> None:
 
 
 @contextmanager
-def local_server():
+def local_server(*, pilot: bool = False):
+    mode = os.environ.get("ROXI_ACCESS_MODE")
+    os.environ["ROXI_ACCESS_MODE"] = "pilot" if pilot else "demo"
+    try:
+        with running_server() as base:
+            yield base
+    finally:
+        if mode is None:
+            os.environ.pop("ROXI_ACCESS_MODE", None)
+        else:
+            os.environ["ROXI_ACCESS_MODE"] = mode
+
+
+@contextmanager
+def running_server():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         base = f"http://127.0.0.1:{listener.getsockname()[1]}"

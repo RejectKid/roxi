@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 from . import query_models as model
 from . import query_service as service
 from . import history_models, history_query
+from . import pilot_access as access
 from .history_changes import list_changes
 
 EVENT_SCHEMA_URI = "exercise-review://schemas/v1/event"
@@ -92,6 +94,9 @@ async def call_tool(_ctx, params: types.CallToolRequestParams) -> types.CallTool
         return tool_result(service.invalid().result(), failed=True)
     try:
         result = await to_thread.run_sync(spec.handler, arguments)
+    except access.AccessError as error:
+        return tool_result(service.QueryError(error.status, "unauthenticated" if error.status == 401 else "not_found",
+                                               error.detail).result(), failed=True)
     except service.QueryError as error:
         return tool_result(error.result(), failed=True)
     except psycopg.OperationalError:
@@ -137,8 +142,8 @@ async def read_resource(_ctx, params: types.ReadResourceRequestParams) -> types.
     ])
 
 
-async def serve() -> None:
-    server = Server(
+def create_server() -> Server:
+    return Server(
         "Exercise review",
         version="1.0.0",
         instructions="Read published exercise revisions or local exercise history. Pin revision IDs for published "
@@ -149,8 +154,16 @@ async def serve() -> None:
         on_list_resource_templates=list_templates,
         on_read_resource=read_resource,
     )
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+
+
+async def serve() -> None:
+    server = create_server()
+    context = access.AUTH.set(access.credential(os.environ.get("ROXI_ACCESS_TOKEN"), "api"))
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+    finally:
+        access.AUTH.reset(context)
 
 
 if __name__ == "__main__":

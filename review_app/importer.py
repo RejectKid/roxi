@@ -11,7 +11,7 @@ import psycopg
 from psycopg.types.json import Jsonb
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, NonNegativeInt, StringConstraints
 
-from .storage import OWNER_DSN, ArchivedFile, archive_file, archive_path
+from .storage import OWNER_DSN, ArchivedFile, archive_file, archive_path, archive_writer
 
 Slug = Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=96)]
 TIMESTAMP = r"(?:\d{2,}:)?[0-5]\d:[0-5]\d\.\d{3}"
@@ -233,6 +233,7 @@ def save_source(conn, exercise_id: str, item: PreparedSource) -> tuple[int, bool
     return source_id, True
 
 
+@archive_writer
 def import_exercise(manifest_path: Path) -> ImportSummary:
     manifest_path = manifest_path.resolve(strict=True)
     manifest_file = archive_file(manifest_path)
@@ -259,6 +260,11 @@ def import_exercise(manifest_path: Path) -> ImportSummary:
             """,
             (manifest.exercise_id, manifest.name, manifest.started_at_utc,
              manifest_file.sha256, glossary_file.sha256, Jsonb(glossary)),
+        )
+        conn.execute(
+            "INSERT INTO pilot_import_archive (exercise_id, digest) "
+            "SELECT %s, unnest(%s::text[]) ON CONFLICT DO NOTHING",
+            (manifest.exercise_id, [manifest_file.sha256, glossary_file.sha256]),
         )
         conn.execute("DELETE FROM exercise_source WHERE exercise_id = %s", (manifest.exercise_id,))
         for position, item in enumerate(items, start=1):

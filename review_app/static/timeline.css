@@ -304,3 +304,9 @@ h2 { font-size: 24px; font-weight: 750; }
   .site-bar { flex-wrap: wrap; gap: 0 8px; }
   .site-nav { min-width: 0; flex-wrap: wrap; gap: 0 14px; }
 }
+.pilot-sign-in { display: grid; gap: .65rem; max-width: 26rem; padding: 1.25rem; }
+.pilot-sign-in input, .pilot-sign-in button, .pilot-account button { padding: .55rem; font: inherit; }
+.pilot-account { display: flex; align-items: center; gap: .6rem; margin-left: auto; }
+.pilot-workspace { padding: 1rem; margin-bottom: 1rem; }
+.pilot-workspace li { margin: .7rem 0; }
+.pilot-workspace li a { margin-left: .6rem; }

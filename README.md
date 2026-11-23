@@ -23,6 +23,7 @@ py -3.13 -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt
 .venv/Scripts/python.exe -m review_app migrate
 .venv/Scripts/python.exe -m review_app import fixtures/drill-01/input/exercise.json
+$env:ROXI_ACCESS_MODE = 'demo'
 .venv/Scripts/python.exe -m uvicorn review_app.app:app --host 127.0.0.1 --port 8000
 ```
 
@@ -39,6 +40,7 @@ The default app and database bind to loopback. PostgreSQL persists in the Compos
 | Load CSV, fleet, and weather sources and inspect freshness | [Source catalog and replay](docs/SOURCE-CATALOG.md) |
 | Review one exercise at two time cutoffs and open map evidence | [Map and history replay](docs/HISTORY-REPLAY.md) |
 | Ask about history, subscribe to changes, or install the Roxi skill | [History assistant, HTTP, SDK, MCP, and voice](docs/HISTORY-INTERFACES.md) |
+| Set up workspace accounts, grant source access, and operate a pilot | [Pilot access and operations](docs/PILOT-OPERATIONS.md) |
 | Query published events and open source evidence | [HTTP and MCP examples](docs/API.md) |
 | Run local speech-to-text or repeat the answer-key evaluation | [Transcription and pilot evaluation](docs/PILOT-EVALUATION.md) |
 | Fix setup, playback, or MCP problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |

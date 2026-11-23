@@ -1,6 +1,8 @@
 import hashlib
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import wraps
 from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -24,6 +26,7 @@ EDITOR_DSN = os.environ.get(
     "EXERCISE_REVIEW_EDITOR_URL",
     "postgresql://review_editor:review-local-editor@127.0.0.1:55432/exercise_review",
 )
+ARCHIVE_LOCK = 538176467047
 
 
 @dataclass(frozen=True)
@@ -79,6 +82,29 @@ def connect_read():
     connection.read_only = True
     connection.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
     return connection
+
+
+def connect_owner(dsn: str | None = None, **kwargs):
+    return psycopg.connect(dsn or OWNER_DSN, connect_timeout=5, row_factory=dict_row, **kwargs)
+
+
+@contextmanager
+def archive_lock(*, shared: bool, dsn: str):
+    # The advisory lock spans the database commit and file work, including retention cleanup.
+    with psycopg.connect(dsn, connect_timeout=5, autocommit=True) as lock:
+        if shared:
+            lock.execute("SELECT pg_advisory_lock_shared(%s)", (ARCHIVE_LOCK,))
+        else:
+            lock.execute("SELECT pg_advisory_lock(%s)", (ARCHIVE_LOCK,))
+        yield
+
+
+def archive_writer(function):
+    @wraps(function)
+    def locked(*args, **kwargs):
+        with archive_lock(shared=True, dsn=EDITOR_DSN):
+            return function(*args, **kwargs)
+    return locked
 
 
 def migrate() -> None:

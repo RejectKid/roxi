@@ -27,6 +27,18 @@ $env:EXERCISE_REVIEW_READER_URL = 'postgresql://review_reader:review-local-reade
 .venv/Scripts/python.exe tools/check_history_interfaces.py
 ```
 
+Run the pilot test with its own empty pair of databases because it verifies the complete backup archive:
+
+```powershell
+docker compose exec -T db createdb -U review_owner roxi_pilot_check
+docker compose exec -T db createdb -U review_owner roxi_pilot_restore
+$env:EXERCISE_REVIEW_DATABASE_URL = 'postgresql://review_owner:review-local-owner@127.0.0.1:55432/roxi_pilot_check'
+$env:EXERCISE_REVIEW_EDITOR_URL = 'postgresql://review_editor:review-local-editor@127.0.0.1:55432/roxi_pilot_check'
+$env:EXERCISE_REVIEW_READER_URL = 'postgresql://review_reader:review-local-reader@127.0.0.1:55432/roxi_pilot_check'
+$env:ROXI_RESTORE_DATABASE_URL = 'postgresql://review_owner:review-local-owner@127.0.0.1:55432/roxi_pilot_restore'
+.venv/Scripts/python.exe tools/check_pilot_operations.py
+```
+
 ## Cut a release
 
 1. Give the version its own `## vX.Y.Z` changelog heading and merge the changes to `main`.

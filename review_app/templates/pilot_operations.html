@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Connector health · Roxi{% endblock %}
+{% block content %}
+<main class="frame workspace">
+  <h1>Connector health</h1>
+  <p class="subtitle">{{ exercise.name }} · Checked {{ checked_at|date_utc }}</p>
+  <p><a href="/exercises/{{ exercise.id }}/operations">Refresh</a></p>
+  {% if chat %}
+  <section class="panel pilot-workspace">
+    <h2>#{{ chat.room_key }}</h2>
+    <p>Connection {{ chat.connection }} · Classifier {{ chat.classifier }}</p>
+    <dl>
+      <dt>Last heartbeat</dt><dd>{{ chat.seen_at|date_utc if chat.seen_at else 'None' }}</dd>
+      <dt>Last message</dt><dd>{{ chat.last_received|date_utc if chat.last_received else 'None' }}</dd>
+      <dt>Pending message versions</dt><dd>{{ chat.pending }}</dd>
+      <dt>Oldest pending age</dt><dd>{{ chat.oldest_pending_seconds ~ ' seconds' if chat.oldest_pending_seconds is not none else 'None' }}</dd>
+      <dt>Classifier checkpoint</dt><dd>{{ chat.change_seq }}</dd>
+    </dl>
+  </section>
+  {% endif %}
+  {% for feed in connectors %}
+  <section class="panel pilot-workspace">
+    <h2>{{ feed.label }}</h2>
+    <p>{{ feed.status|capitalize }} · Last successful fetch {{ feed.last_successful_fetch|date_utc if feed.last_successful_fetch else 'unavailable' }}</p>
+    {% if feed.gaps %}<ul>{% for gap in feed.gaps %}<li>{{ gap }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+  {% endfor %}
+  {% if not chat and not connectors %}<p>No live connectors are registered for this exercise.</p>{% endif %}
+</main>
+{% endblock %}

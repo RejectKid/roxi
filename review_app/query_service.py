@@ -1,7 +1,6 @@
 import base64
 import hashlib
 import json
-import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +10,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
 from . import query_models as model
+from . import pilot_access as access
 from .storage import archive_path, connect_read
 
 # Effective transcript text belongs to the selected revision, including when the draft has moved on.
@@ -52,9 +52,10 @@ def unavailable() -> QueryError:
 
 
 def check_scope(exercise_id: str) -> None:
-    setting = os.environ.get("EXERCISE_REVIEW_API_EXERCISES")
-    if setting is not None and exercise_id not in {part.strip() for part in setting.split(",")}:
-        raise not_found()
+    try:
+        access.require(exercise_id)
+    except access.AccessError as error:
+        raise QueryError(error.status, "unauthenticated" if error.status == 401 else "not_found", error.detail) from None
 
 
 def revision_row(conn, exercise_id: str, revision_id: int | None = None) -> dict:

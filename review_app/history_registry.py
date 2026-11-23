@@ -10,7 +10,7 @@ from .importer import Slug
 from .live_chat import connect_editor
 from .source_adapters import Label, Latitude, Longitude
 from .source_catalog import read_bounded
-from .storage import archive_capture, connect_read
+from .storage import archive_capture, archive_writer, connect_read
 
 Version = Annotated[int, Field(gt=0, le=2**31 - 1)]
 Namespace = Annotated[str, StringConstraints(pattern=r"^(catalog|chat):[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=104)]
@@ -121,6 +121,7 @@ def lock_versions(conn, exercise_id: str) -> None:
     conn.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"history:{exercise_id}",))
 
 
+@archive_writer
 def load_registry(exercise_id: str, path: Path) -> dict:
     payload = manifest_bytes(path)
     registry = Registry.model_validate_json(payload)
@@ -148,6 +149,7 @@ def load_registry(exercise_id: str, path: Path) -> dict:
         ).fetchone()
 
 
+@archive_writer
 def load_layer(exercise_id: str, layer_key: str, version: int, label: str, effective: datetime, path: Path) -> dict:
     payload = manifest_bytes(path)
     layer = Layer.model_validate_json(payload)

@@ -182,7 +182,7 @@ class EvidenceResult(RecordItem, RevisionRef):
 
 
 class ErrorInfo(BaseModel):
-    code: Literal["invalid_argument", "not_found", "source_unavailable", "temporarily_unavailable"]
+    code: Literal["invalid_argument", "unauthenticated", "not_found", "source_unavailable", "temporarily_unavailable"]
     message: str
     request_id: str
     retryable: bool

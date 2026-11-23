@@ -22,7 +22,7 @@ class HistoryFilters(BaseModel):
         return None if isinstance(value, str) and not value.strip() else value
 
 
-def catalog_observations(conn, exercise_id, known_at, as_of):
+def catalog_observations(conn, exercise_id, known_at, as_of, allowed):
     return conn.execute(
         """
         WITH known AS (
@@ -38,6 +38,7 @@ def catalog_observations(conn, exercise_id, known_at, as_of):
             ) AS derived ON true
             CROSS JOIN LATERAL jsonb_array_elements(derived.records) WITH ORDINALITY AS item(record, ordinal)
             WHERE capture.exercise_id = %(exercise)s AND capture.captured_at <= %(known)s
+              AND (%(allowed)s::text[] IS NULL OR capture.source_key = ANY(%(allowed)s))
         ), arrivals AS (
             SELECT *, max(observed_at) OVER (
                 PARTITION BY source_key ORDER BY received_at, id
@@ -53,11 +54,12 @@ def catalog_observations(conn, exercise_id, known_at, as_of):
         SELECT * FROM records
         ORDER BY observed_at DESC, received_at DESC, id DESC, ordinal LIMIT %(limit)s
         """,
-        {"exercise": exercise_id, "known": known_at, "cutoff": as_of, "limit": DISPLAY_LIMIT + 1},
+        {"exercise": exercise_id, "known": known_at, "cutoff": as_of, "limit": DISPLAY_LIMIT + 1,
+         "allowed": allowed},
     ).fetchall()
 
 
-def chat_observations(conn, exercise_id, known_at, as_of):
+def chat_observations(conn, exercise_id, known_at, as_of, allowed):
     return conn.execute(
         """
         WITH messages AS (
@@ -70,6 +72,7 @@ def chat_observations(conn, exercise_id, known_at, as_of):
             JOIN live_room AS room USING (exercise_id)
             WHERE version.exercise_id = %(exercise)s AND version.received_at <= %(known)s
               AND version.classified_at <= %(known)s
+              AND (%(allowed)s::text[] IS NULL OR room.room_key = ANY(%(allowed)s))
             ORDER BY version.message_id, version.version DESC
         ), reports AS (
             SELECT *, count(*) FILTER (WHERE observed_at IS NULL) OVER () AS untimed_count
@@ -81,19 +84,21 @@ def chat_observations(conn, exercise_id, known_at, as_of):
             observed_at DESC NULLS LAST, received_at DESC, id DESC
         LIMIT %(limit)s
         """,
-        {"exercise": exercise_id, "known": known_at, "cutoff": as_of, "limit": DISPLAY_LIMIT + 1},
+        {"exercise": exercise_id, "known": known_at, "cutoff": as_of, "limit": DISPLAY_LIMIT + 1,
+         "allowed": allowed},
     ).fetchall()
 
 
-def layers_for(conn, exercise_id, known_at, as_of):
+def layers_for(conn, exercise_id, known_at, as_of, allowed):
     rows = conn.execute(
         """
         SELECT DISTINCT ON (layer_key) layer_key, version, label, effective_at, recorded_at, digest, features
         FROM history_layer
         WHERE exercise_id = %s AND recorded_at <= %s AND effective_at <= %s
+          AND (%s::text[] IS NULL OR layer_key = ANY(%s))
         ORDER BY layer_key, version DESC
         """,
-        (exercise_id, known_at, as_of or known_at),
+        (exercise_id, known_at, as_of or known_at, allowed, allowed),
     ).fetchall()
     return [{**row, "original_url": f"/exercises/{exercise_id}/history/layers/{row['layer_key']}/{row['version']}/original"}
             for row in rows]
@@ -150,7 +155,11 @@ def attach_conflicts(items: list[dict]) -> None:
             item["conflicts"] = [peer["key"] for peer in group if peer["reported_status"] != item["reported_status"]]
 
 
-def view(exercise_id: str, filters: HistoryFilters) -> dict:
+def source_keys(sources: frozenset[str] | None, namespace: str) -> list[str] | None:
+    return None if sources is None else [source.split(":", 1)[1] for source in sources if source.startswith(namespace + ":")]
+
+
+def view(exercise_id: str, filters: HistoryFilters, sources: frozenset[str] | None = None) -> dict:
     known_at = filters.known_at or datetime.now(UTC)
     as_of = filters.as_of
     with connect_read() as conn:
@@ -159,10 +168,10 @@ def view(exercise_id: str, filters: HistoryFilters) -> dict:
             "SELECT version, reviewed_at, digest, registry FROM history_registry "
             "WHERE exercise_id = %s AND reviewed_at <= %s ORDER BY version DESC LIMIT 1",
             (exercise_id, known_at),
-        ).fetchone()
-        layers = layers_for(conn, exercise_id, known_at, as_of)
-        catalog = catalog_observations(conn, exercise_id, known_at, as_of)
-        chat = chat_observations(conn, exercise_id, known_at, as_of)
+        ).fetchone() if sources is None or "history:registry" in sources else None
+        layers = layers_for(conn, exercise_id, known_at, as_of, source_keys(sources, "map"))
+        catalog = catalog_observations(conn, exercise_id, known_at, as_of, source_keys(sources, "catalog"))
+        chat = chat_observations(conn, exercise_id, known_at, as_of, source_keys(sources, "chat"))
 
     registry = registry_row["registry"] if registry_row else {}
     items = [catalog_item(exercise_id, row) for row in catalog]

@@ -1,4 +1,5 @@
 import math
+import os
 
 import psycopg
 from fastapi import FastAPI, HTTPException, Request
@@ -16,6 +17,9 @@ from .history_registry import HistoryError
 from .history_routes import router as history_router
 from .live_chat import LiveError, registered_room
 from .live_routes import router as live_router
+from . import pilot_access as access
+from .pilot_operations import router as operations_router
+from .pilot_routes import gate, router as pilot_router
 from .query_routes import router as query_router
 from .review_routes import router as review_router
 from .review_store import ReviewError
@@ -26,7 +30,12 @@ from .views import templates
 
 app = FastAPI(title="Exercise review")
 app.mount("/static", StaticFiles(directory=ROOT / "review_app" / "static"), name="static")
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
+app.middleware("http")(gate)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=[
+    host.strip() for host in os.environ.get("ROXI_TRUSTED_HOSTS", "127.0.0.1,localhost").split(",") if host.strip()
+])
+app.include_router(pilot_router)
+app.include_router(operations_router)
 app.include_router(review_router)
 app.include_router(query_router)
 app.include_router(assistant_router)
@@ -47,6 +56,16 @@ async def review_error(_request: Request, error: ReviewError | LiveError | Catal
 @app.exception_handler(query_service.QueryError)
 async def query_error(_request: Request, error: query_service.QueryError):
     return JSONResponse(error.result().model_dump(mode="json"), status_code=error.status)
+
+
+@app.exception_handler(access.AccessError)
+async def access_error(request: Request, error: access.AccessError):
+    if request.url.path.startswith("/v1/"):
+        code = "unauthenticated" if error.status == 401 else "not_found"
+        return await query_error(request, query_service.QueryError(error.status, code, error.detail))
+    if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+        return templates.TemplateResponse(request, "pilot_denied.html", {"status": error.status}, status_code=error.status)
+    return JSONResponse({"detail": error.detail}, status_code=error.status)
 
 
 @app.exception_handler(RequestValidationError)
@@ -73,9 +92,17 @@ def health():
 @app.get("/", response_class=HTMLResponse)
 @app.get("/exercises/{exercise_id}", response_class=HTMLResponse)
 def timeline(request: Request, exercise_id: str | None = None):
+    if exercise_id is None and not access.demo():
+        return templates.TemplateResponse(request, "pilot_workspaces.html", {"exercises": access.visible_exercises()})
+    if exercise_id is not None:
+        access.require(exercise_id)
     with connect_read() as conn:
         if exercise_id is None:
-            exercise = conn.execute("SELECT id, name, glossary FROM exercise ORDER BY imported_at DESC, id LIMIT 1").fetchone()
+            exercise = conn.execute(
+                "SELECT id, name, glossary FROM exercise WHERE NOT EXISTS "
+                "(SELECT 1 FROM pilot_exercise WHERE exercise_id = exercise.id) "
+                "ORDER BY imported_at DESC, id LIMIT 1"
+            ).fetchone()
             if exercise is None:
                 return templates.TemplateResponse(request, "empty.html", {})
         else:
@@ -151,13 +178,15 @@ def timeline(request: Request, exercise_id: str | None = None):
 
 
 def original_file(exercise_id: str, source_id: int, kind: str, media_type: str):
+    access.require(exercise_id, full=False)
     with connect_read() as conn:
         source = conn.execute(
-            "SELECT content_sha256 FROM source_file WHERE id = %s AND exercise_id = %s AND kind = %s",
+            "SELECT source_key, content_sha256 FROM source_file WHERE id = %s AND exercise_id = %s AND kind = %s",
             (source_id, exercise_id, kind),
         ).fetchone()
     if source is None:
         raise HTTPException(404, "Source file not found.")
+    access.require(exercise_id, full=False, source=f"recorded:{source['source_key']}")
     path = archive_path(source["content_sha256"])
     if not path.is_file():
         raise HTTPException(410, "The source file is unavailable in the local archive.")
