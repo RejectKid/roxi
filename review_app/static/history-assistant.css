@@ -1,0 +1,16 @@
+.history-assistant { padding: 18px; }
+.history-assistant h2 { margin-bottom: 12px; }
+.history-clock-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.history-assistant label { display: block; font-weight: 600; }
+.history-assistant input, .history-assistant textarea { width: 100%; font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 5px; }
+.history-assistant input { margin-top: 4px; }
+.history-assistant-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.history-assistant button { padding: 6px 12px; border: 1px solid var(--line); border-radius: 5px; background: white; }
+.history-assistant button[type="submit"] { color: white; background: #1749d1; border-color: #1749d1; }
+#history-answer { margin-top: 14px; overflow-wrap: anywhere; }
+.history-answer-facts { padding-left: 24px; }
+.history-answer-facts > li { margin: 10px 0; }
+.history-answer-facts p { margin: 0 0 4px; }
+.history-citation { margin-right: 12px; }
+.history-answer-gaps { color: var(--muted); }
+@media (max-width: 720px) { .history-clock-fields { grid-template-columns: minmax(0, 1fr); } }

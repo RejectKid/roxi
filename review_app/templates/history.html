@@ -12,6 +12,7 @@
 <main class="frame workspace">
   <h1>Map and history</h1>
   <p class="subtitle">{{ exercise.name }}</p>
+  <p><a href="{{ assistant_url }}">Ask about this view</a></p>
   <form class="panel history-filters" method="get">
     <label>Observed through
       <input name="as_of" value="{{ as_of.isoformat() if as_of else '' }}" placeholder="YYYY-MM-DDTHH:MM:SSZ" aria-describedby="history-clock-hint">

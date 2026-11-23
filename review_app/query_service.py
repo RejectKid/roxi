@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from psycopg.types.json import Jsonb
+from pydantic import BaseModel
 
 from . import query_models as model
 from .storage import archive_path, connect_read
@@ -116,7 +117,7 @@ def check_window(filters: model.PageFilters) -> None:
         raise invalid("start_ms must be less than end_ms.")
 
 
-def filter_fingerprint(operation: str, request: model.RecordRequest | model.EventRequest) -> str:
+def filter_fingerprint(operation: str, request: BaseModel) -> str:
     query = request.model_dump(mode="json", exclude={"cursor", "limit"})
     if isinstance(request, model.EventRequest):
         query["event_types"] = sorted(set(query["event_types"]))

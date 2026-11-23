@@ -11,6 +11,7 @@ from pydantic import Field, ValidationError
 
 from . import live_chat as live
 from .importer import Slug
+from .query_service import check_scope
 from .review_routes import require_local_json
 from .storage import READER_DSN
 from .views import templates
@@ -98,6 +99,7 @@ async def stream(
 
 @router.get("/evidence/{item_id}", response_class=HTMLResponse)
 def evidence_page(request: Request, exercise_id: Slug, item_id: ItemId):
+    check_scope(exercise_id)
     exercise, record, history = live.original_evidence(exercise_id, item_id)
     return templates.TemplateResponse(request, "live_evidence.html", {
         "exercise": exercise, "record": record, "history": history, "nav_section": "timeline",
@@ -106,5 +108,6 @@ def evidence_page(request: Request, exercise_id: Slug, item_id: ItemId):
 
 @router.get("/evidence/{item_id}/original")
 def original_message(exercise_id: Slug, item_id: ItemId):
+    check_scope(exercise_id)
     _, record, _ = live.original_evidence(exercise_id, item_id)
     return Response(record["original"], media_type="application/json", headers={"X-Content-Type-Options": "nosniff"})

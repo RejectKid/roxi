@@ -24,6 +24,7 @@ $env:EXERCISE_REVIEW_READER_URL = 'postgresql://review_reader:review-local-reade
 .venv/Scripts/python.exe tools/check_live_replay.py
 .venv/Scripts/python.exe tools/check_source_catalog.py
 .venv/Scripts/python.exe tools/check_history_view.py
+.venv/Scripts/python.exe tools/check_history_interfaces.py
 ```
 
 ## Cut a release

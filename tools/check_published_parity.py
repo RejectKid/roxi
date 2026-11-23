@@ -50,7 +50,7 @@ async def verify(base: str, exercise_id: str) -> None:
     async with Client(server, read_timeout_seconds=10) as client:
         published = await client.list_tools()
         expected = {"get_exercise_revision", "search_records", "list_events", "get_evidence"}
-        if {tool.name for tool in published.tools} != expected or not all(
+        if not expected <= {tool.name for tool in published.tools} or not all(
             tool.annotations and tool.annotations.read_only_hint and tool.output_schema for tool in published.tools
         ):
             raise RuntimeError("The MCP server did not advertise the four read-only tools and their result schemas.")

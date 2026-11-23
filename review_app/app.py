@@ -11,6 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from . import query_service
 from .assistant_routes import router as assistant_router
 from .extraction import subjects
+from .history_api import router as history_api_router
 from .history_registry import HistoryError
 from .history_routes import router as history_router
 from .live_chat import LiveError, registered_room
@@ -32,6 +33,7 @@ app.include_router(assistant_router)
 app.include_router(live_router)
 app.include_router(source_router)
 app.include_router(history_router)
+app.include_router(history_api_router)
 
 
 @app.exception_handler(ReviewError)

@@ -9,6 +9,7 @@ MAX_BIGINT = 2**63 - 1
 MAX_INT = 2**31 - 1
 RevisionId = Annotated[int, Field(ge=1, le=MAX_INT)]
 Offset = Annotated[int, Field(ge=0, le=MAX_BIGINT)]
+Cursor = Annotated[str, StringConstraints(min_length=1, max_length=512)]
 EvidenceId = Annotated[str, StringConstraints(
     pattern=r"^s[1-9][0-9]{0,18}-r[1-9][0-9]{0,9}(?:-t[a-f0-9]{64})?$",
     max_length=98,
@@ -35,7 +36,7 @@ class PageFilters(Input):
     start_ms: Offset | None = None
     end_ms: Offset | None = None
     limit: Annotated[int, Field(ge=1, le=100)] = 25
-    cursor: Annotated[str, StringConstraints(min_length=1, max_length=512)] | None = None
+    cursor: Cursor | None = None
 
 
 class RecordFilters(PageFilters):

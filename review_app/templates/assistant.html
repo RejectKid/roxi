@@ -10,6 +10,7 @@
     <div>
       <h1>Exercise assistant</h1>
       <p class="subtitle">{{ exercise.name }}</p>
+      <p><a href="/exercises/{{ exercise.id }}/history/assistant">Ask about map and history</a></p>
     </div>
     {% if selected %}
     <form action="/exercises/{{ exercise.id }}/assistant" class="revision-select">

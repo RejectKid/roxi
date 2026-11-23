@@ -37,6 +37,7 @@ def history_page(request: Request, exercise_id: Slug, filters: Annotated[History
         **context, "nav_section": "history", "known_filter": filters.known_at,
         "map_data": jsonable_encoder({"points": points, "shapes": shapes}),
         "pinned_url": f"/exercises/{exercise_id}/history?{urlencode(cutoff)}",
+        "assistant_url": f"/exercises/{exercise_id}/history/assistant?{urlencode(cutoff)}",
     })
 
 

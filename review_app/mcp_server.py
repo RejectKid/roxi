@@ -15,6 +15,8 @@ from pydantic import BaseModel, ValidationError
 
 from . import query_models as model
 from . import query_service as service
+from . import history_models, history_query
+from .history_changes import list_changes
 
 EVENT_SCHEMA_URI = "exercise-review://schemas/v1/event"
 GLOSSARY_TEMPLATE = "exercise-review://exercises/{exercise_id}/revisions/{revision_id}/glossary"
@@ -47,6 +49,19 @@ TOOLS = {
         "and relative HTTP path for the original archived file.",
         model.EvidenceRequest, model.EvidenceResult, service.get_evidence,
     ),
+    "query_history": ToolSpec(
+        "Query a pinned local civilian history. Use mode snapshot, changes, conflicts, or overdue. "
+        "For changes, provide an earlier baseline_known_at. Cutoffs are ISO timestamps with offsets.",
+        history_models.HistoryQuery, history_models.HistoryResult, history_query.query_history,
+    ),
+    "get_history_evidence": ToolSpec(
+        "Verify the exact original record for a history citation using its exercise_id, known_at, as_of, and key.",
+        history_models.EvidenceRequest, history_models.OpenHistoryEvidence, history_query.open_evidence,
+    ),
+    "list_history_changes": ToolSpec(
+        "Read committed history change IDs. Resume with the after token from the previous page.",
+        history_models.ChangeRequest, history_models.ChangePage, list_changes,
+    ),
 }
 
 
@@ -70,7 +85,7 @@ def tool_result(result: BaseModel, *, failed: bool = False) -> types.CallToolRes
 async def call_tool(_ctx, params: types.CallToolRequestParams) -> types.CallToolResult:
     spec = TOOLS.get(params.name)
     if spec is None:
-        return tool_result(service.invalid("Unknown published-revision tool.").result(), failed=True)
+        return tool_result(service.invalid("Unknown Roxi tool.").result(), failed=True)
     try:
         arguments = spec.arguments.model_validate(params.arguments or {})
     except ValidationError:
@@ -126,7 +141,8 @@ async def serve() -> None:
     server = Server(
         "Exercise review",
         version="1.0.0",
-        instructions="Read published revisions of completed exercises. Resolve the latest revision once, then pin its ID.",
+        instructions="Read published exercise revisions or local exercise history. Pin revision IDs for published "
+        "records and exact ISO timestamps for history. Open original evidence before citing a history finding.",
         on_list_tools=list_tools,
         on_call_tool=call_tool,
         on_list_resources=list_resources,

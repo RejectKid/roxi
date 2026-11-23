@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}History assistant · {{ exercise.name }}{% endblock %}
+{% block scripts %}
+<link rel="stylesheet" href="/static/assistant.css">
+<link rel="stylesheet" href="/static/history-assistant.css">
+<script type="module" src="/static/history-assistant.js"></script>
+{% endblock %}
+{% block content %}
+<main class="frame workspace assistant">
+  <h1>History assistant</h1>
+  <p class="subtitle">{{ exercise.name }}</p>
+  <section class="panel history-assistant" aria-labelledby="history-question-title">
+    <h2 id="history-question-title">Ask a question</h2>
+    <form id="history-question-form" action="/exercises/{{ exercise.id }}/history/answer">
+      <div class="history-clock-fields">
+        <label>Observed through <input name="as_of" value="{{ as_of.isoformat() if as_of else '' }}" placeholder="Optional ISO timestamp"></label>
+        <label>Known by <input name="known_at" value="{{ known_at.isoformat() }}" required></label>
+        <label>Baseline known by <input name="baseline_known_at" placeholder="Earlier cutoff for changes"></label>
+      </div>
+      <label for="history-question">Question</label>
+      <textarea id="history-question" name="question" maxlength="1000" required rows="2"
+                placeholder="Which reports disagree?"></textarea>
+      <div class="history-assistant-actions">
+        <button type="submit">Ask</button>
+        <button type="button" id="record-question" data-url="/exercises/{{ exercise.id }}/history/voice">Record question</button>
+        <button type="button" id="read-answer" disabled>Read answer aloud</button>
+      </div>
+      <p id="history-voice-status" class="history-answer-gaps" role="status"></p>
+    </form>
+    <div id="history-answer" aria-live="polite"></div>
+  </section>
+</main>
+{% endblock %}
