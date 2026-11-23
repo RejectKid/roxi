@@ -16,6 +16,8 @@ from .live_routes import router as live_router
 from .query_routes import router as query_router
 from .review_routes import router as review_router
 from .review_store import ReviewError
+from .source_catalog import CatalogError
+from .source_routes import router as source_router
 from .storage import ROOT, archive_path, connect_read
 from .views import templates
 
@@ -26,11 +28,13 @@ app.include_router(review_router)
 app.include_router(query_router)
 app.include_router(assistant_router)
 app.include_router(live_router)
+app.include_router(source_router)
 
 
 @app.exception_handler(ReviewError)
 @app.exception_handler(LiveError)
-async def review_error(_request: Request, error: ReviewError | LiveError):
+@app.exception_handler(CatalogError)
+async def review_error(_request: Request, error: ReviewError | LiveError | CatalogError):
     return JSONResponse({"detail": error.detail}, status_code=error.status)
 
 

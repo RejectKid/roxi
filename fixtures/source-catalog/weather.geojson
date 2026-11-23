@@ -1,0 +1,15 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": null,
+      "properties": {
+        "station": "https://api.weather.gov/stations/KDAY",
+        "timestamp": "2026-11-23T14:05:00Z",
+        "temperature": {"value": 8.5, "unitCode": "wmoUnit:degC"},
+        "windSpeed": {"value": null, "unitCode": "wmoUnit:km_h-1"}
+      }
+    }
+  ]
+}

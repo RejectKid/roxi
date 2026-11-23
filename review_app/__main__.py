@@ -9,6 +9,7 @@ from pydantic import TypeAdapter
 from .importer import Slug, import_exercise
 from .live_chat import LiveError, register_room, work
 from .live_export import export_snapshot
+from . import source_catalog
 from .storage import migrate
 
 
@@ -34,6 +35,25 @@ def main() -> None:
     snapshot.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
     snapshot.add_argument("review_exercise", type=TypeAdapter(Slug).validate_python)
     snapshot.add_argument("output", type=Path)
+    catalog = commands.add_parser("sources", help="Register, ingest, and replay catalog sources.")
+    source_commands = catalog.add_subparsers(dest="source_command", required=True)
+    registration = source_commands.add_parser("register", help="Register sources from a JSON catalog.")
+    registration.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
+    registration.add_argument("config", type=Path)
+    for name, help_text in (
+        ("ingest", "Capture a local CSV or JSON file."),
+        ("fetch-weather", "Fetch recent observations for the registered NWS station."),
+        ("replay", "Derive a new parser version from an archived capture."),
+    ):
+        action = source_commands.add_parser(name, help=help_text)
+        action.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
+        action.add_argument("source", type=TypeAdapter(Slug).validate_python)
+        if name == "ingest":
+            action.add_argument("file", type=Path)
+            action.add_argument("--parser-version", type=int)
+        if name == "replay":
+            action.add_argument("capture_id", type=int)
+            action.add_argument("--parser-version", type=int, required=True)
     args = parser.parse_args()
 
     try:
@@ -53,18 +73,35 @@ def main() -> None:
         elif args.command == "export-live":
             count = export_snapshot(args.exercise, args.review_exercise, args.output)
             print(f"Exported {count} messages to {args.output}.")
+        elif args.command == "sources":
+            run_source_command(args)
         else:
             from .transcription import build_bundle
 
             report = build_bundle(args.manifest, args.output, model_name=args.model, language=args.language,
                                   exercise_id=args.exercise_id, offline=args.offline)
             print(json.dumps(report, indent=2))
-    except LiveError as exc:
+    except (LiveError, source_catalog.CatalogError) as exc:
         parser.exit(1, f"{args.command} failed: {exc.detail}\n")
     except (OSError, ValueError, RuntimeError, psycopg.Error) as exc:
         parser.exit(1, f"{args.command} failed: {exc}\n")
     except KeyboardInterrupt:
         parser.exit(130)
+
+
+def run_source_command(args) -> None:
+    if args.source_command == "register":
+        print(json.dumps({"registered": source_catalog.register(args.exercise, args.config)}))
+        return
+    if args.source_command == "ingest":
+        receipt = source_catalog.ingest_file(args.exercise, args.source, args.file, args.parser_version)
+    elif args.source_command == "fetch-weather":
+        receipt = source_catalog.fetch_weather(args.exercise, args.source)
+    else:
+        receipt = source_catalog.replay(args.exercise, args.source, args.capture_id, args.parser_version)
+    print(json.dumps(asdict(receipt)))
+    if receipt.state in {"quarantined", "unavailable"}:
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

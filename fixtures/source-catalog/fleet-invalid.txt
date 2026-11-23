@@ -1,0 +1,1 @@
+{"schema":"roxi.civilian-fleet/v1","vehicles":[

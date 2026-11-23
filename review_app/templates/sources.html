@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Sources · {{ exercise.name }}{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="/static/sources.css">{% endblock %}
+{% macro time_value(stamp) -%}
+  {% if stamp %}<time datetime="{{ stamp.isoformat() }}">{{ stamp.strftime('%Y-%m-%d %H:%M:%S %Z') }}</time>
+  {% else %}—{% endif %}
+{%- endmacro %}
+{% block content %}
+<main class="frame workspace">
+  <h1>Sources</h1>
+  <p class="subtitle">{{ exercise.name }}</p>
+  <div class="source-list">
+    {% for source in sources %}
+    <section class="panel source-card" aria-labelledby="source-{{ loop.index }}">
+      <div class="source-heading">
+        <h2 id="source-{{ loop.index }}">{{ source.label }}</h2>
+        <span class="source-status" data-state="{{ source.status }}">{{ source.status | title }}</span>
+      </div>
+      <dl class="source-facts">
+        <div><dt>Input schema</dt><dd>{{ source.input_schema }}</dd></div>
+        {% if source.parser_version is defined %}
+        <div><dt>Parser version</dt><dd>{{ source.parser_version if source.parser_version is not none else '—' }}</dd></div>
+        {% endif %}
+        {% if source.last_attempt_at is defined %}
+        <div><dt>Last attempt</dt><dd>{{ time_value(source.last_attempt_at) }}</dd></div>
+        {% endif %}
+        <div><dt>{{ 'Last import' if source.status == 'recorded' else 'Last receipt' if source.kind == 'sandbox-chat' else 'Last successful fetch' }}</dt><dd>{{ time_value(source.last_successful_fetch) }}</dd></div>
+        {% if source.observed_at is defined %}
+        <div><dt>Newest observation</dt><dd>{{ time_value(source.observed_at) }}</dd></div>
+        {% endif %}
+        {% if source.latency_seconds is defined %}
+        <div><dt>{{ 'Classification delay' if source.kind == 'sandbox-chat' else 'Source latency' }}</dt>
+          <dd>{{ '%.1f s' | format(source.latency_seconds) if source.latency_seconds is not none else '—' }}</dd></div>
+        {% endif %}
+        {% if source.record_count is defined %}
+        <div><dt>Records</dt><dd>{{ source.record_count }}</dd></div>
+        {% endif %}
+      </dl>
+      {% if source.gaps %}
+      <ul class="source-gaps">
+        {% for gap in source.gaps %}<li>{{ gap }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      <div class="source-links">
+        {% if source.capture_url %}
+        <a href="{{ source.capture_url }}">{{ 'Open usable capture' if source.kind == 'adapter' else 'Open evidence' }}</a>
+        {% endif %}
+        {% if source.latest_capture_url and source.latest_capture_url != source.capture_url %}
+        <a href="{{ source.latest_capture_url }}">Inspect latest capture</a>
+        {% endif %}
+      </div>
+      {% if source.recent_captures and source.recent_captures | length > 1 %}
+      <details class="source-history">
+        <summary>Recent captures</summary>
+        <ul>
+          {% for capture in source.recent_captures %}
+          <li><a href="{{ capture.url }}">Capture {{ capture.id }} · {{ capture.state | title }}</a>
+            <span class="source-note">{{ time_value(capture.captured_at) }}</span></li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </section>
+    {% else %}
+    <p>No sources have been registered for this exercise.</p>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}

@@ -11,7 +11,7 @@ From the checkout, with Python 3.13 and the dependencies installed:
 .venv/Scripts/python.exe -m unittest discover -s tests -v
 ```
 
-The pull-request and main-branch workflows run unit tests on Linux and Windows. The Linux integration check starts disposable PostgreSQL, imports a generated test fixture, accepts and publishes review decisions, and scores the assistant's answers and source citations. It compares HTTP and MCP outputs and checks live chat replay and worker recovery. CI uses deterministic test PCM and does not measure speech recognition. Use the [pilot evaluation](docs/PILOT-EVALUATION.md#repeat-the-checks) to test local speech-to-text.
+The pull-request and main-branch workflows run unit tests on Linux and Windows. The Linux integration check starts disposable PostgreSQL, imports a generated test fixture, accepts and publishes review decisions, and scores the assistant's answers and source citations. It compares HTTP and MCP outputs and checks live chat recovery, source freshness, quarantine, and parser replay. CI uses deterministic test PCM and does not measure speech recognition. Use the [pilot evaluation](docs/PILOT-EVALUATION.md#repeat-the-checks) to test local speech-to-text.
 
 You can run the CI smoke check locally after creating a fresh disposable PostgreSQL database in the development container. In a new PowerShell session, replace `roxi_smoke` with the name of that test database and use the local fixture credentials.
 
@@ -22,6 +22,7 @@ $env:EXERCISE_REVIEW_EDITOR_URL = 'postgresql://review_editor:review-local-edito
 $env:EXERCISE_REVIEW_READER_URL = 'postgresql://review_reader:review-local-reader@127.0.0.1:55432/roxi_smoke'
 .venv/Scripts/python.exe tools/smoke_demo.py
 .venv/Scripts/python.exe tools/check_live_replay.py
+.venv/Scripts/python.exe tools/check_source_catalog.py
 ```
 
 ## Cut a release

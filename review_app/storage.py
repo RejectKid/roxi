@@ -1,8 +1,10 @@
 import hashlib
 import os
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import BinaryIO
 
 import psycopg
 from psycopg.rows import dict_row
@@ -35,19 +37,28 @@ def archive_path(digest: str) -> Path:
 
 
 def archive_file(source: Path) -> ArchivedFile:
+    with source.open("rb") as stream:
+        return archive_stream(stream, source.name)
+
+
+def archive_capture(data: bytes) -> ArchivedFile:
+    return archive_stream(BytesIO(data), "source capture", allow_empty=True)
+
+
+def archive_stream(stream: BinaryIO, name: str, *, allow_empty: bool = False) -> ArchivedFile:
     ARCHIVE.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256()
     size = 0
     temporary = None
     try:
-        with source.open("rb") as src, NamedTemporaryFile(dir=ARCHIVE, delete=False) as dest:
+        with NamedTemporaryFile(dir=ARCHIVE, delete=False) as dest:
             temporary = Path(dest.name)
-            while chunk := src.read(1024 * 1024):
+            while chunk := stream.read(1024 * 1024):
                 dest.write(chunk)
                 digest.update(chunk)
                 size += len(chunk)
-        if not size:
-            raise ValueError(f"{source.name} is empty.")
+        if not size and not allow_empty:
+            raise ValueError(f"{name} is empty.")
         key = digest.hexdigest()
         target = archive_path(key)
         target.parent.mkdir(exist_ok=True)

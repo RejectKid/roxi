@@ -1,0 +1,38 @@
+[
+  {
+    "source_key": "assets",
+    "label": "West Annex asset register",
+    "adapter_key": "assets-csv",
+    "stale_after_seconds": 2592000,
+    "expected_ids": ["forklift-04", "lift-l7", "pallet-jack-07"]
+  },
+  {
+    "source_key": "sites",
+    "label": "West Annex site register",
+    "adapter_key": "sites-csv",
+    "stale_after_seconds": 2592000,
+    "expected_ids": ["west-annex", "receiving-depot"]
+  },
+  {
+    "source_key": "civilian-fleet",
+    "label": "West Annex fleet",
+    "adapter_key": "civilian-fleet",
+    "stale_after_seconds": 3600,
+    "expected_ids": ["van-12", "shuttle-07"]
+  },
+  {
+    "source_key": "weather-replay",
+    "label": "Weather replay",
+    "adapter_key": "nws-observations",
+    "stale_after_seconds": 10800,
+    "expected_ids": ["KDAY"]
+  },
+  {
+    "source_key": "weather-nws",
+    "label": "Public NWS weather",
+    "adapter_key": "nws-observations",
+    "stale_after_seconds": 10800,
+    "expected_ids": ["KDAY"],
+    "nws_station": "KDAY"
+  }
+]

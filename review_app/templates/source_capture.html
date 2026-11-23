@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Source capture · {{ source.label }}{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="/static/sources.css">{% endblock %}
+{% macro locator(location) -%}
+  {% if location.kind == "csv_row" %}CSV row {{ location.value }}
+  {% else %}<code>{{ location.value or 'JSON root' }}</code>{% endif %}
+{%- endmacro %}
+{% block content %}
+{% set catalog_path = '/exercises/' ~ exercise.id ~ '/sources' %}
+<main class="frame workspace source-capture">
+  <h1>{{ source.label }}</h1>
+  <p class="subtitle">{{ capture.original_name }} · {{ capture.byte_size }} bytes</p>
+  <div class="source-links">
+    <a href="{{ catalog_path }}">Back to sources</a>
+    <a href="{{ catalog_path }}/{{ source.source_key }}/captures/{{ capture.id }}/original">Download original bytes</a>
+  </div>
+  <p class="source-digest">SHA-256 <code>{{ capture.digest }}</code></p>
+  {% for version in derivations %}
+  <section class="panel source-card">
+    <div class="source-heading">
+      <h2>Parser version {{ version.parser_version }}</h2>
+      <span class="source-status" data-state="{{ version.state }}">{{ version.state | title }}</span>
+    </div>
+    <p>{{ version.input_schema }} · {{ version.record_count }} records · {{ version.issue_count }} issues</p>
+    <p class="source-note">Derived {{ version.derived_at.strftime('%Y-%m-%d %H:%M:%S %Z') }}</p>
+    {% if version.issues %}
+    <h3>Coverage and validation</h3>
+    <ul class="source-gaps">
+      {% for item in version.issues %}<li>{{ locator(item.locator) }} · {{ item.detail }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if version.records %}
+    <h3>Normalized records</h3>
+    {% for item in version.records %}
+    <details class="source-record">
+      <summary>{{ item.subject_id }} · {{ locator(item.locator) }}</summary>
+      <p class="source-note">Observed {{ item.observed_at }}</p>
+      <pre>{{ item.data | tojson(indent=2) }}</pre>
+    </details>
+    {% endfor %}
+    {% endif %}
+    {% if version.record_count > version.records | length or version.issue_count > version.issues | length %}
+    <p class="source-note">Showing up to 50 records and 50 issues. The download contains the full original.</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</main>
+{% endblock %}
