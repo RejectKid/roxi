@@ -6,6 +6,7 @@ import os
 import shutil
 import socket
 import wave
+from contextlib import contextmanager
 from pathlib import Path
 from random import Random
 from tempfile import TemporaryDirectory
@@ -84,6 +85,24 @@ def wait_ready(base: str, thread: Thread) -> None:
     raise RuntimeError("The local smoke-test server did not become healthy.")
 
 
+@contextmanager
+def local_server():
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        base = f"http://127.0.0.1:{listener.getsockname()[1]}"
+        server = uvicorn.Server(uvicorn.Config("review_app.app:app", log_level="warning", access_log=False))
+        thread = Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+        thread.start()
+        try:
+            wait_ready(base, thread)
+            yield base
+        finally:
+            server.should_exit = True
+            thread.join(timeout=10)
+        if thread.is_alive():
+            raise RuntimeError("The smoke-test server did not stop.")
+
+
 def run(folder: Path) -> None:
     os.environ["EXERCISE_REVIEW_ARCHIVE"] = str(folder / "archive")
     os.environ["EXERCISE_REVIEW_API_EXERCISES"] = EXERCISE
@@ -110,25 +129,13 @@ def run(folder: Path) -> None:
     if import_exercise(manifest).new_source_versions != 0:
         raise RuntimeError("An identical import should create no new source versions.")
 
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        base = f"http://127.0.0.1:{listener.getsockname()[1]}"
-        server = uvicorn.Server(uvicorn.Config("review_app.app:app", log_level="warning"))
-        thread = Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
-        thread.start()
-        try:
-            wait_ready(base, thread)
-            revision = review_and_publish(base)
-            asyncio.run(verify(base, EXERCISE))
-            report = score_chat(base, EXERCISE, revision, source_root=manifest.parent)
-            print(json.dumps(report, indent=2, ensure_ascii=True))
-            if not chat_passed(report):
-                raise RuntimeError("The assistant or its evidence did not match the drill key.")
-        finally:
-            server.should_exit = True
-            thread.join(timeout=10)
-        if thread.is_alive():
-            raise RuntimeError("The smoke-test server did not stop.")
+    with local_server() as base:
+        revision = review_and_publish(base)
+        asyncio.run(verify(base, EXERCISE))
+        report = score_chat(base, EXERCISE, revision, source_root=manifest.parent)
+        print(json.dumps(report, indent=2, ensure_ascii=True))
+        if not chat_passed(report):
+            raise RuntimeError("The assistant or its evidence did not match the drill key.")
 
 
 if __name__ == "__main__":

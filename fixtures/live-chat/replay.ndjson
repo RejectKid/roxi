@@ -1,0 +1,12 @@
+{"deliver_ms":0,"message":{"message_id":"bay-report","version":1,"sent_ms":120000,"sender":"facilities","text":"Bay 3 is OOS."}}
+{"deliver_ms":350,"message":{"message_id":"small-talk","version":1,"sent_ms":121000,"sender":"yard","text":"Thanks for bringing the coffee."}}
+{"deliver_ms":650,"message":{"message_id":"bay-report","version":1,"sent_ms":120000,"sender":"facilities","text":"Bay 3 is OOS."}}
+{"deliver_ms":1000,"message":{"message_id":"bay-correction","version":1,"sent_ms":149000,"sender":"facilities","text":"Correction, Bay 2 is OOS."}}
+{"deliver_ms":1400,"message":{"message_id":"bay-ack","version":1,"sent_ms":160000,"sender":"dispatch","text":"Copy, Bay 2 OOS."}}
+{"deliver_ms":1700,"message":{"message_id":"late-lift","version":1,"sent_ms":132250,"sender":"maintenance","text":"Lift L-7 is back in service."}}
+{"deliver_ms":2100,"message":{"message_id":"cart-status","version":1,"sent_ms":175000,"sender":"yard","text":"Cart C-17 is out of service."}}
+{"deliver_ms":2450,"message":{"message_id":"cart-status","version":2,"sent_ms":175000,"sender":"yard","text":"Cart C-17 is in service."}}
+{"deliver_ms":2700,"message":{"message_id":"cart-status","version":1,"sent_ms":175000,"sender":"yard","text":"Cart C-17 is out of service."}}
+{"deliver_ms":3100,"message":{"message_id":"returns-status","version":2,"sent_ms":188000,"sender":"receiving","text":"Returns Cage 1 is open for returns."}}
+{"deliver_ms":3400,"message":{"message_id":"returns-status","version":1,"sent_ms":188000,"sender":"receiving","text":"Returns Cage 1 is closed for returns."}}
+{"deliver_ms":3700,"message":{"message_id":"late-lift","version":1,"sent_ms":132250,"sender":"maintenance","text":"Lift L-7 is back in service."}}

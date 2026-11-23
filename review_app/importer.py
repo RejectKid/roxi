@@ -18,6 +18,7 @@ TIMESTAMP = r"(?:\d{2,}:)?[0-5]\d:[0-5]\d\.\d{3}"
 CUE_TIMING = re.compile(rf"^(?P<start>{TIMESTAMP})\s+-->\s+(?P<end>{TIMESTAMP})(?:\s+.*)?$")
 VOICE_TAG = re.compile(r"^<v(?:\.[^\s>]+)?\s+([^>]+)>(.*?)(?:</v>)?$", re.DOTALL)
 CHAT_LINE = re.compile(r"^\[(\d{2,}:[0-5]\d:[0-5]\d)\] <([^<>]+)> (.+)$")
+CHAT_LINE_MS = re.compile(r"^\[(\d{2,}:[0-5]\d:[0-5]\d\.\d{3})\] <([^<>]+)> (.+)$")
 PARSER_VERSION = 1
 
 
@@ -35,7 +36,7 @@ class ChatSource(BaseModel):
     source_key: Slug
     kind: Literal["chat"]
     file: str
-    time_basis: Literal["exercise_elapsed"]
+    time_basis: Literal["exercise_elapsed", "exercise_elapsed_ms"]
 
 
 class Manifest(BaseModel):
@@ -110,14 +111,16 @@ def elapsed_ms(value: str) -> int:
     return seconds * 1000 + int(fractional or 0)
 
 
-def parse_chat(text: str) -> tuple[list[Record], list[Issue]]:
+def parse_chat(text: str, *, milliseconds: bool = False) -> tuple[list[Record], list[Issue]]:
     records, issues = [], []
+    pattern = CHAT_LINE_MS if milliseconds else CHAT_LINE
+    clock = "HH:MM:SS.mmm" if milliseconds else "HH:MM:SS"
     for number, line in enumerate(text.splitlines(), start=1):
         if not line.strip():
             continue
-        match = CHAT_LINE.fullmatch(line)
+        match = pattern.fullmatch(line)
         if not match:
-            issues.append(Issue(number, "Expected [HH:MM:SS] <speaker> message.", line))
+            issues.append(Issue(number, f"Expected [{clock}] <speaker> message.", line))
             continue
         stamp, speaker, message = match.groups()
         records.append(Record(number, None, speaker, message, line, elapsed_ms(stamp)))
@@ -185,7 +188,7 @@ def prepare_source(root: Path, source: AudioSource | ChatSource) -> PreparedSour
         profile["transcript_sha256"] = transcript.sha256
     else:
         transcript_path = transcript = duration = None
-        records, issues = parse_chat(read_text(raw))
+        records, issues = parse_chat(read_text(raw), milliseconds=source.time_basis == "exercise_elapsed_ms")
     profile_sha = hashlib.sha256(json.dumps(profile, sort_keys=True).encode()).hexdigest()
     return PreparedSource(source, media_path.name, raw, profile_sha,
                           transcript_path.name if transcript_path else None, transcript, duration, records, issues)

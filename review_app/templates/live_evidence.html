@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Live chat evidence · {{ exercise.name }}{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="/static/live.css">{% endblock %}
+{% block content %}
+<main class="frame workspace">
+  <h1>Live chat evidence</h1>
+  <p class="subtitle">{{ exercise.name }}</p>
+  <section class="panel live-panel">
+    <h2>{{ record.sender }} <span class="live-room">· Version {{ record.version }}</span></h2>
+    <p class="time">Sent {{ record.sent_ms | clock(true) }} · Received {{ record.received_at.isoformat() }}</p>
+    <p>{{ record.body }}</p>
+    <p><a href="/exercises/{{ exercise.id }}/live/evidence/{{ record.id }}/original">Open original payload</a></p>
+    <h3>Message history</h3>
+    <ul>
+      {% for item in history %}
+        <li>
+          {% if item.id == record.id %}Version {{ item.version }} (open)
+          {% else %}<a href="/exercises/{{ exercise.id }}/live/evidence/{{ item.id }}">Version {{ item.version }}</a>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+</main>
+{% endblock %}

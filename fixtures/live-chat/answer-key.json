@@ -1,0 +1,21 @@
+{
+  "exercise_id": "west-annex-live",
+  "room": "receiving-dock",
+  "deliveries": 12,
+  "duplicates_at": [3, 9, 12],
+  "restart_after_delivery": 4,
+  "versions": [
+    {"message_id":"bay-report","version":1,"kind":"status_report","subject_id":"bay-3","reported_status":"out_of_service","late":false},
+    {"message_id":"small-talk","version":1,"kind":"chatter","subject_id":null,"reported_status":null,"late":false},
+    {"message_id":"bay-correction","version":1,"kind":"correction","subject_id":"bay-2","reported_status":"out_of_service","late":false},
+    {"message_id":"bay-ack","version":1,"kind":"acknowledgment","subject_id":"bay-2","reported_status":null,"late":false},
+    {"message_id":"late-lift","version":1,"kind":"status_report","subject_id":"lift-l7","reported_status":"in_service","late":true},
+    {"message_id":"cart-status","version":1,"kind":"status_report","subject_id":"cart-c17","reported_status":"out_of_service","late":false},
+    {"message_id":"cart-status","version":2,"kind":"status_report","subject_id":"cart-c17","reported_status":"in_service","late":false},
+    {"message_id":"returns-status","version":2,"kind":"status_report","subject_id":"returns-cage-1","reported_status":"in_service","late":false},
+    {"message_id":"returns-status","version":1,"kind":"status_report","subject_id":"returns-cage-1","reported_status":"out_of_service","late":false}
+  ],
+  "current_in_message_time_order": [
+    "returns-status@2", "cart-status@2", "bay-ack@1", "bay-correction@1", "late-lift@1", "small-talk@1", "bay-report@1"
+  ]
+}

@@ -1,0 +1,14 @@
+.live-panel { margin: 0 0 20px; padding: 16px; }
+.live-heading, .live-message-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+.live-heading { justify-content: space-between; }
+.live-heading h2 { margin: 0; }
+.live-room, .live-status, .live-hint, .live-empty, .live-marker { color: var(--muted); font-size: 0.88rem; }
+.live-room { margin: 4px 0 0; }
+.live-status { margin: 0; }
+.live-hint { margin: 8px 0; }
+.live-list { padding: 0; margin: 0; list-style: none; max-height: 24rem; overflow-y: auto; }
+.live-message { padding: 8px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.live-message p { margin: 4px 0 0; }
+.live-message .time { font-size: 0.82rem; }
+.live-kind { font-size: 0.82rem; font-weight: 650; color: #233d7c; background: #edf3ff; padding: 2px 6px; border-radius: 4px; }
+.live-kind.chatter { color: #475569; background: #f1f5f9; }

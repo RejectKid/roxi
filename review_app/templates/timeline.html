@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ exercise.name }} · Exercise review{% endblock %}
-{% block scripts %}<script defer src="/static/timeline.js"></script>{% endblock %}
+{% block scripts %}
+<script defer src="/static/timeline.js"></script>
+{% if live_room %}{% include "live_assets.html" %}{% endif %}
+{% endblock %}
 {% macro clip_data(record) -%}
   data-clip
   data-src="/exercises/{{ exercise.id }}/audio/{{ record.source_file_id }}"
@@ -15,10 +18,14 @@
 {% block content %}
 <main class="frame workspace">
   <h1>{{ exercise.name }}</h1>
+  {% if not live_room %}
   <p class="subtitle">Synchronized radio and chat <span aria-hidden="true">·</span> {{ duration | clock }}</p>
+  {% endif %}
+
+  {% if live_room %}{% include "live_panel.html" %}{% endif %}
 
   <section class="panel overview" aria-labelledby="timeline-title">
-    <h2 id="timeline-title">Exercise timeline</h2>
+    <h2 id="timeline-title">{{ 'Recorded timeline' if live_room else 'Exercise timeline' }}</h2>
     <div class="time-grid">
       {% for kind, label in [('audio', 'Radio'), ('chat', 'Chat')] %}
       <div class="lane-label">{{ label }}</div>

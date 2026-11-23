@@ -10,6 +10,9 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import query_service
 from .assistant_routes import router as assistant_router
+from .extraction import subjects
+from .live_chat import LiveError, registered_room
+from .live_routes import router as live_router
 from .query_routes import router as query_router
 from .review_routes import router as review_router
 from .review_store import ReviewError
@@ -22,10 +25,12 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost
 app.include_router(review_router)
 app.include_router(query_router)
 app.include_router(assistant_router)
+app.include_router(live_router)
 
 
 @app.exception_handler(ReviewError)
-async def review_error(_request: Request, error: ReviewError):
+@app.exception_handler(LiveError)
+async def review_error(_request: Request, error: ReviewError | LiveError):
     return JSONResponse({"detail": error.detail}, status_code=error.status)
 
 
@@ -60,11 +65,11 @@ def health():
 def timeline(request: Request, exercise_id: str | None = None):
     with connect_read() as conn:
         if exercise_id is None:
-            exercise = conn.execute("SELECT id, name FROM exercise ORDER BY imported_at DESC, id LIMIT 1").fetchone()
+            exercise = conn.execute("SELECT id, name, glossary FROM exercise ORDER BY imported_at DESC, id LIMIT 1").fetchone()
             if exercise is None:
                 return templates.TemplateResponse(request, "empty.html", {})
         else:
-            exercise = conn.execute("SELECT id, name FROM exercise WHERE id = %s", (exercise_id,)).fetchone()
+            exercise = conn.execute("SELECT id, name, glossary FROM exercise WHERE id = %s", (exercise_id,)).fetchone()
             if exercise is None:
                 raise HTTPException(404, "Exercise not found.")
 
@@ -97,6 +102,7 @@ def timeline(request: Request, exercise_id: str | None = None):
             """,
             (exercise["id"],),
         ).fetchall()
+        room = registered_room(conn, exercise["id"])
 
     for record in records:
         record["key"] = f"record-{record['source_file_id']}-{record['ordinal']}"
@@ -128,6 +134,8 @@ def timeline(request: Request, exercise_id: str | None = None):
             "ticks": ticks,
             "initial_clip": initial_clip,
             "issues": issues,
+            "live_room": room,
+            "live_subjects": subjects(exercise["glossary"]) if room else {},
         },
     )
 

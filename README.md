@@ -35,6 +35,7 @@ The default app and database bind to loopback. PostgreSQL persists in the Compos
 | What you want to do | Guide |
 | --- | --- |
 | Review, publish, and ask about the West Annex drill | [Demo walkthrough](docs/DEMO.md) |
+| Replay warehouse chat and see classifications as messages arrive | [Live sandbox walkthrough](docs/LIVE-DEMO.md) |
 | Query published events and open source evidence | [HTTP and MCP examples](docs/API.md) |
 | Run local speech-to-text or repeat the answer-key evaluation | [Transcription and pilot evaluation](docs/PILOT-EVALUATION.md) |
 | Fix setup, playback, or MCP problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |

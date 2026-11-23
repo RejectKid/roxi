@@ -1,0 +1,13 @@
+<section class="panel live-panel" aria-labelledby="live-title" data-live-exercise="{{ exercise.id }}"
+         data-live-view="{{ nav_section }}" data-live-subjects='{{ live_subjects | tojson }}'>
+  <div class="live-heading">
+    <div>
+      <h2 id="live-title">{{ 'Live proposals' if nav_section == 'review' else 'Live chat' }}</h2>
+      <p class="live-room">#{{ live_room }}</p>
+    </div>
+    <p class="live-status" role="status" data-live-status>Connecting…</p>
+  </div>
+  <p class="live-hint">Latest 60 messages by send time. Open a message to see its original and edit history.</p>
+  <p class="live-empty" data-live-empty>{{ 'Waiting for proposals.' if nav_section == 'review' else 'Waiting for chat messages.' }}</p>
+  <ul class="live-list" data-live-items></ul>
+</section>

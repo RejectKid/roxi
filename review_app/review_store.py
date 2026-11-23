@@ -5,6 +5,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from .extraction import Extractor, describe_review, link_options, subjects
+from .live_chat import registered_room
 from .storage import EDITOR_DSN, connect_read
 
 
@@ -150,8 +151,10 @@ def get_review(exercise_id: str) -> dict:
             "SELECT number, draft_version FROM review_revision WHERE exercise_id = %s ORDER BY number DESC LIMIT 1",
             (exercise_id,),
         ).fetchone()
+        room = registered_room(conn, exercise_id)
     describe_review(events)
-    return {"exercise": exercise, "draft": draft, "events": events, "latest": latest,
+    return {"exercise": exercise, "draft": draft, "events": events, "latest": latest, "live_room": room,
+            "live_subjects": subjects(exercise["glossary"]) if room else {},
             "subjects": subjects(draft["glossary"]) if draft else {},
             "inputs_changed": bool(draft and (exercise["source_file_ids"] != draft["source_file_ids"]
                                                or exercise["glossary"] != draft["glossary"]))}

@@ -56,6 +56,8 @@ jobs:
         run: docker compose up -d --wait db
       - name: Import, publish, and verify the demo
         run: python tools/smoke_demo.py
+      - name: Replay sandbox chat and verify worker recovery
+        run: python tools/check_live_replay.py
       - name: Show database logs on failure
         if: failure()
         run: docker compose logs db

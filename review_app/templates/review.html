@@ -4,6 +4,7 @@
 {% block scripts %}
 <link rel="stylesheet" href="/static/review.css">
 <script defer src="/static/review.js"></script>
+{% if live_room %}{% include "live_assets.html" %}{% endif %}
 {% endblock %}
 {% block content %}
 {% set exercise_path = '/exercises/' ~ exercise.id %}
@@ -30,6 +31,8 @@
       {% endif %}
     </div>
   </div>
+
+  {% if live_room %}{% include "live_panel.html" %}{% endif %}
 
   {% if inputs_changed %}
   <p class="review-notice">New source versions are available. This draft still uses the previous inputs until you refresh.</p>

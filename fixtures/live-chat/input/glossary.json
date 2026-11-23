@@ -1,0 +1,9 @@
+{
+  "subjects": [
+    {"subject_id": "bay-2", "label": "Bay 2", "aliases": ["Bay two"]},
+    {"subject_id": "bay-3", "label": "Bay 3", "aliases": ["Bay three"]},
+    {"subject_id": "lift-l7", "label": "Lift L-7", "aliases": ["L-7"]},
+    {"subject_id": "cart-c17", "label": "Cart C-17", "aliases": ["C-17"]},
+    {"subject_id": "returns-cage-1", "label": "Returns Cage 1", "aliases": ["Cage 1"]}
+  ]
+}
