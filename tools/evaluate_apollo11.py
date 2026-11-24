@@ -40,7 +40,7 @@ class Turn:
 
 # Milliseconds within the highlights excerpt. Mission time labels refer to tape 2/9, page 17.
 TURNS = (
-    Turn("original-report", "00 02 54 09", 1420, 19230, "status_report"),
+    Turn("original-report", "00 02 54 09", 1420, 19230, "time_report"),
     Turn("crew-readback", "00 02 54 33", 25420, 37940, "acknowledgment"),
     Turn("correction", "00 02 54 46", 38510, 43080, "correction"),
     Turn("crew-acknowledgment", "00 02 54 55", 47750, 48260, "acknowledgment"),
@@ -50,7 +50,7 @@ LINKS = (
     ("correction", "original-report"),
     ("crew-acknowledgment", "correction"),
 )
-TIME_VALUE = re.compile(r"\bseparation\s+(?:at|should be)\s+(\d+(?:\s*(?:plus\s*)?\d+)*)", re.I)
+EXPECTED_TIMES = {"original-report": 11700, "correction": 11703}
 
 
 def source(url: str, folder: Path, digest: str) -> Path:
@@ -120,7 +120,8 @@ def make_inputs(cache: Path, output: Path) -> tuple[Path, dict]:
         sections.append(f"{turn.name}\n{timestamp(turn.start_ms)} --> {timestamp(turn.end_ms)}\n"
                         f"<v {talker}>{escape(body, quote=False)}</v>")
     (inputs / "reference.vtt").write_text("WEBVTT\n\n" + "\n\n".join(sections) + "\n", encoding="utf-8")
-    glossary = {"subjects": [{"subject_id": "separation-time", "label": "Separation time", "aliases": ["separation"]}]}
+    glossary = {"subjects": [{"subject_id": "separation-time", "label": "Separation time", "aliases": ["separation"],
+                              "value_type": "elapsed_time"}]}
     (inputs / "glossary.json").write_text(json.dumps(glossary), encoding="utf-8")
     manifest = inputs / "exercise.json"
     manifest.write_text(json.dumps({
@@ -183,16 +184,34 @@ def score_links(events: list[dict], turn_citations: dict[str, str | None]) -> li
 
 
 def score_times(records: list[dict]) -> dict:
-    expected = {"original-report": "31500", "correction": "31503"}
+    from review_app.reported_times import reported_time
+
     results = {}
     for turn in TURNS:
-        if turn.name not in expected:
+        if turn.name not in EXPECTED_TIMES:
             continue
-        text = " ".join(record["excerpt"] for record in records if overlap(record["locator"], turn))
-        values = ["".join(re.findall(r"\d", match)) for match in TIME_VALUE.findall(text)]
-        results[turn.name] = {"expected": expected[turn.name], "observed": values,
-                              "matched": expected[turn.name] in values}
+        values = [parsed[0] for record in records if overlap(record["locator"], turn)
+                  if (parsed := reported_time(record["excerpt"], ["separation"]))]
+        results[turn.name] = {"expected": EXPECTED_TIMES[turn.name], "observed": values,
+                              "matched": EXPECTED_TIMES[turn.name] in values}
     return results
+
+
+def review_unique_correction(post, version: int, events: list[dict]) -> int | None:
+    corrections = [item for item in events if item["event_type"] == "correction"
+                   and item["payload"]["replacement_time_seconds"] is not None]
+    if len(corrections) != 1 or len(corrections[0]["candidate_event_ids"]) != 1:
+        return None
+    correction = corrections[0]
+    target = next(item for item in events if item["event_id"] == correction["candidate_event_ids"][0])
+    if target["event_type"] != "time_report":
+        return None
+    # Simulate accepting the unique suggestion without inserting any answer-key text or times.
+    for event, target_id in ((target, None), (correction, target["event_id"])):
+        version = post(f"/review/events/{event['event_id']}", {
+            "version": version, "subject_id": event["subject_id"], "state": "accepted", "target_id": target_id
+        })["version"]
+    return post("/review/publish", {"version": version})["number"]
 
 
 def score_branch(base: str, token: str, exercise_id: str, reference: dict, wav: Path) -> dict:
@@ -208,36 +227,60 @@ def score_branch(base: str, token: str, exercise_id: str, reference: dict, wav: 
     if records["next_cursor"] or events["next_cursor"]:
         raise ValueError("The benchmark excerpt exceeded one result page.")
     clips = score_citations(base, prefix, token, records["items"], wav)
+    by_id = {record["evidence_id"]: record for record in records["items"]}
     targets = {}
     for turn in TURNS:
         target = max(clips, key=lambda clip: overlap(clip["locator"], turn), default=None)
         if target and not overlap(target["locator"], turn):
             target = None
+        expected_words = words(reference[turn.name][1])
+        actual_words = words(by_id[target["evidence_id"]]["excerpt"]) if target else []
         targets[turn.name] = {
             "expected_ms": [turn.start_ms, turn.end_ms], "mission_time": turn.mission,
             "closest_cue": target["locator"]["cue_id"] if target else None,
             "overlap_ms": overlap(target["locator"], turn) if target else 0,
             "turn_citation_correct": bool(target and target["link_valid"] and contains_turn(target["locator"], turn)),
             "matching_evidence_id": target["evidence_id"] if target and contains_turn(target["locator"], turn) else None,
+            "reference_words": len(expected_words), "word_edits": edit_distance(expected_words, actual_words),
         }
     expected = words(" ".join(reference[turn.name][1] for turn in TURNS))
     generated = words(" ".join(record["excerpt"] for record in records["items"]))
     distance = edit_distance(expected, generated)
-    assistant = post("/assistant/ask", {"revision_id": revision,
+    reviewed = review_unique_correction(post, draft["version"], events["items"])
+    answer_revision = reviewed or revision
+    assistant = post("/assistant/ask", {"revision_id": answer_revision,
                                        "question": "What was the correction to the separation time?"})
+    answer_clips = score_citations(base, f"/v1/exercises/{exercise_id}/revisions/{answer_revision}",
+                                  token, assistant["citations"], wav)
+    verified_turns = [turn.name for turn in TURNS for clip in answer_clips
+                      if clip["link_valid"] and contains_turn(clip["locator"], turn)]
+    by_turn = {name: detail["matching_evidence_id"] for name, detail in targets.items()}
+    links = score_links(events["items"], by_turn)
+    negative_control = None
+    if reviewed:
+        accepted = result(base, f"/v1/exercises/{exercise_id}/revisions/{reviewed}/events", token=token)["items"]
+        linked = score_links(accepted, by_turn)
+        for before, after in zip(links, linked, strict=True):
+            before["linked"] = after["linked"]
+        original = assistant["claim"]["original_time_seconds"]
+        if original is not None:
+            negative_control = post("/assistant/verify", {**assistant["claim"], "original_time_seconds": original - 1})["status"]
     return {
         "asr": {"reference_words": len(expected), "hypothesis_words": len(generated),
                 "word_edits": distance, "word_error_rate": round(distance / len(expected), 6)},
         "clips": clips, "turns": targets, "announced_times": score_times(records["items"]),
         "events": [{"kind": event["event_type"], "state": event["review_state"], "evidence_ids": event["evidence_ids"]}
                    for event in events["items"]],
-        "links": score_links(events["items"], {name: turn["matching_evidence_id"] for name, turn in targets.items()}),
+        "links": links,
         "assistant": {"verification": assistant["verification"]["status"], "answer": assistant["answer"],
-                      "citations": [item["evidence_id"] for item in assistant["citations"]]},
+                      "revision": answer_revision, "citations": answer_clips, "matching_turns": verified_turns,
+                      "wrong_value_control": negative_control,
+                      "times_seconds": [assistant["claim"]["original_time_seconds"], assistant["claim"]["revised_time_seconds"]]},
     }
 
 
-def evaluate(output: Path, cache: Path, browser_check: Path | None) -> dict:
+def evaluate(output: Path, cache: Path, browser_check: Path | None, *, reference_only: bool = False,
+             model: str = "small.en", profile: str = "standard") -> dict:
     from review_app import pilot_admin
     from review_app.importer import import_exercise
     from review_app.storage import connect_owner, migrate
@@ -247,25 +290,33 @@ def evaluate(output: Path, cache: Path, browser_check: Path | None) -> dict:
         if conn.execute("SELECT 1 FROM pg_tables WHERE schemaname = 'public' LIMIT 1").fetchone():
             raise ValueError("Use a new disposable database for this benchmark.")
     manifest, reference = make_inputs(cache, output)
-    raw = output / "raw"
-    performance = build_bundle(manifest, raw, exercise_id="apollo11-raw", offline=True)
     wav = manifest.parent / "apollo-radio.wav"
-    if source_hash(raw / "sources" / "apollo-radio.wav") != source_hash(wav):
-        raise ValueError("Roxi transcription changed the excerpt WAV.")
+    performance = None
+    branches = {"reference_control": manifest}
+    if not reference_only:
+        raw = output / "raw"
+        performance = build_bundle(manifest, raw, exercise_id="apollo11-raw", offline=True,
+                                   model_name=model, profile=profile)
+        if source_hash(raw / "sources" / "apollo-radio.wav") != source_hash(wav):
+            raise ValueError("Roxi transcription changed the excerpt WAV.")
+        branches["raw"] = raw / "exercise.json"
     migrate()
     pilot_admin.workspace("apollo11", "Apollo 11 archived audio benchmark")
     username, password = "apollo-reviewer", secrets.token_urlsafe(24)
     pilot_admin.set_password(username, password)
     pilot_admin.member("apollo11", username, "reviewer", all_sources=True)
-    for path in (raw / "exercise.json", manifest):
+    exercises = {}
+    for name, path in branches.items():
         imported = import_exercise(path)
         pilot_admin.attach("apollo11", imported.exercise_id)
+        exercises[name] = imported.exercise_id
     token = pilot_admin.issue_token(username)
     with local_server(pilot=True) as base:
         results = {name: score_branch(base, token, exercise, reference, wav)
-                   for name, exercise in (("raw", "apollo11-raw"), ("reference_control", "apollo11-reference"))}
+                   for name, exercise in exercises.items()}
         if browser_check:
             paths = {name: branch["clips"] for name, branch in results.items()}
+            paths.update({name + "_answer": branch["assistant"]["citations"] for name, branch in results.items()})
             env = dict(os.environ, ROXI_BENCHMARK_BASE=base, ROXI_BENCHMARK_USERNAME=username,
                        ROXI_BENCHMARK_PASSWORD=password, ROXI_BENCHMARK_CLIPS=json.dumps(paths))
             browser = subprocess.run(["node", str(browser_check.resolve())], env=env, capture_output=True, text=True,
@@ -281,6 +332,9 @@ def main() -> None:
     parser.add_argument("--cache", type=Path, default=Path(".local/apollo11-day1"))
     parser.add_argument("--output", type=Path, required=True, help="New output directory for the evaluation run.")
     parser.add_argument("--browser-check", type=Path, help="Optional Node script that tests the emitted playback URLs.")
+    parser.add_argument("--reference-only", action="store_true", help="Verify correction linking without running speech recognition.")
+    parser.add_argument("--model", default="small.en", help="Locally cached Faster Whisper model.")
+    parser.add_argument("--profile", choices=("standard", "radio"), default="standard")
     args = parser.parse_args()
     if any(not os.environ.get(name) for name in DATABASE_SETTINGS):
         parser.error("Set all three database URLs to a new disposable database.")
@@ -289,7 +343,8 @@ def main() -> None:
     os.environ["EXERCISE_REVIEW_ARCHIVE"] = str(args.output.resolve() / "archive")
     os.environ["EXERCISE_REVIEW_CHAT_MODEL"] = ""
     os.environ.pop("EXERCISE_REVIEW_API_EXERCISES", None)
-    report = evaluate(args.output, args.cache, args.browser_check)
+    report = evaluate(args.output, args.cache, args.browser_check, reference_only=args.reference_only,
+                      model=args.model, profile=args.profile)
     encoded = json.dumps(report, indent=2) + "\n"
     (args.output / "report.json").write_text(encoded, encoding="utf-8")
     print(encoded, end="")

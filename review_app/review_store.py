@@ -4,8 +4,9 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from .extraction import Extractor, describe_review, link_options, subjects
+from .extraction import Extractor, describe_review, link_options, subjects, timed_subjects
 from .live_chat import registered_room
+from .reported_times import time_replaces
 from .storage import EDITOR_DSN, connect_read
 
 
@@ -104,18 +105,23 @@ def start_or_refresh(exercise_id: str, version: int | None) -> dict:
                 "UPDATE review_draft SET source_file_ids = %s, glossary = %s WHERE exercise_id = %s",
                 (source_ids, Jsonb(glossary), exercise_id),
             )
-        extractor = Extractor(glossary)
+        extractor = Extractor(glossary, elapsed_times=True)
         proposals = []
         for record in record_rows(conn, exercise_id, source_ids):
             proposal = extractor.extract(record["edited_body"] or record["body"])
             if proposal is not None:
                 proposals.append((exercise_id, record["source_file_id"], record["ordinal"],
-                                  proposal.kind, proposal.subject_id, proposal.reported_status))
+                                  proposal.kind, proposal.subject_id, proposal.reported_status, proposal.reported_time_seconds))
         with conn.cursor() as cursor:
             cursor.executemany(
                 """
-                INSERT INTO review_event (exercise_id, source_file_id, ordinal, kind, subject_id, reported_status)
-                VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (exercise_id, source_file_id, ordinal) DO NOTHING
+                INSERT INTO review_event (exercise_id, source_file_id, ordinal, kind, subject_id,
+                                          reported_status, reported_time_seconds)
+                VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (exercise_id, source_file_id, ordinal)
+                DO UPDATE SET kind = EXCLUDED.kind, subject_id = EXCLUDED.subject_id, reported_status = NULL,
+                              reported_time_seconds = EXCLUDED.reported_time_seconds
+                WHERE review_event.state = 'proposed' AND review_event.kind = 'acknowledgment'
+                  AND review_event.target_id IS NULL AND EXCLUDED.reported_time_seconds IS NOT NULL
                 """,
                 proposals,
             )
@@ -161,7 +167,8 @@ def get_review(exercise_id: str) -> dict:
 
 
 def save_event(exercise_id: str, event_id: int, version: int, subject_id: str | None,
-               reported_status: str | None, state: str, target_id: int | None) -> int:
+               reported_status: str | None, state: str, target_id: int | None,
+               reported_time_seconds: int | None = None) -> int:
     with psycopg.connect(EDITOR_DSN, connect_timeout=5, row_factory=dict_row) as conn:
         draft = get_draft(conn, exercise_id, lock=True)
         require_version(draft, version)
@@ -171,27 +178,43 @@ def save_event(exercise_id: str, event_id: int, version: int, subject_id: str | 
             raise ReviewError(404, "Event not found in this draft.")
         if subject_id is not None and subject_id not in subjects(draft["glossary"]):
             raise ReviewError(422, "Choose an exercise subject or leave it unresolved.")
+        if event["reported_time_seconds"] is not None and reported_time_seconds is None:
+            reported_time_seconds = event["reported_time_seconds"]
+        if reported_time_seconds is not None and (
+            event["reported_time_seconds"] is None or reported_status is not None
+            or subject_id not in timed_subjects(draft["glossary"])
+        ):
+            raise ReviewError(422, "Use a timed report subject and an elapsed time.")
         if event["kind"] == "status_report" and not reported_status:
             raise ReviewError(422, "Choose the reported status.")
         if event["kind"] == "acknowledgment" and reported_status is not None:
             raise ReviewError(422, "An acknowledgment records receipt.")
         if event["kind"] == "correction" and state == "accepted" and subject_id is None and reported_status is None:
             raise ReviewError(422, "Provide the replacement subject or status before accepting the correction.")
+        revised = {**event, "subject_id": subject_id, "reported_time_seconds": reported_time_seconds}
+        if reported_time_seconds is not None and event["kind"] == "correction" and state == "accepted" and target_id is None:
+            raise ReviewError(422, "Choose the earlier time report before accepting the correction.")
         if target_id is not None:
-            target = next((item for item in link_options(event, events) if item["id"] == target_id), None)
+            target = next((item for item in link_options(revised, events) if item["id"] == target_id), None)
             if target is None:
                 raise ReviewError(422, "Choose an earlier eligible report or correction as the link target.")
             if state == "accepted" and target["state"] != "accepted":
                 raise ReviewError(422, "Accept the linked event first, or save this event without a link.")
         if state != "accepted" and any(item["state"] == "accepted" and item["target_id"] == event_id for item in events):
             raise ReviewError(422, "Update the accepted links to this event before changing its review decision.")
-        if (event["subject_id"], event["reported_status"], event["state"], event["target_id"]) == (
-            subject_id, reported_status, state, target_id
+        if reported_time_seconds is not None and any(
+            item["state"] == "accepted" and item["kind"] == "correction" and item["target_id"] == event_id
+            and not time_replaces(item, revised) for item in events
+        ):
+            raise ReviewError(422, "Update the accepted time correction before changing the linked report.")
+        if (event["subject_id"], event["reported_status"], event["state"], event["target_id"], event["reported_time_seconds"]) == (
+            subject_id, reported_status, state, target_id, reported_time_seconds
         ):
             return draft["version"]
         conn.execute(
-            "UPDATE review_event SET subject_id = %s, reported_status = %s, state = %s, target_id = %s WHERE id = %s",
-            (subject_id, reported_status, state, target_id, event_id),
+            "UPDATE review_event SET subject_id = %s, reported_status = %s, state = %s, target_id = %s, "
+            "reported_time_seconds = %s WHERE id = %s",
+            (subject_id, reported_status, state, target_id, reported_time_seconds, event_id),
         )
         return bump_version(conn, exercise_id)
 

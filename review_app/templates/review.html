@@ -89,7 +89,13 @@
               {% endfor %}
             </select>
           </label>
-          {% if event.kind != 'acknowledgment' %}
+          {% if event.reported_time_seconds is not none %}
+          <label>{{ 'Replacement elapsed time' if event.kind == 'correction' else 'Reported elapsed time' }}
+            <input name="reported_time_seconds" type="number" min="0" max="3599999" step="1"
+                   value="{{ event.reported_time_seconds }}" required>
+            <span class="review-hint">Seconds · {{ event.reported_time_seconds | reported_time }}</span>
+          </label>
+          {% elif event.kind != 'acknowledgment' %}
           <label>{{ 'Replacement reported status' if event.kind == 'correction' else 'Reported status' }}
             <select name="reported_status" {% if event.kind == 'status_report' %}required{% endif %}>
               {% if event.kind == 'correction' %}<option value="">Carry forward from the linked report</option>{% endif %}
@@ -99,7 +105,7 @@
             </select>
           </label>
           {% endif %}
-          {% if event.kind != 'status_report' %}
+          {% if event.kind in ['acknowledgment', 'correction'] %}
           <label class="form-wide">Linked {{ 'correction or report' if event.kind == 'acknowledgment' else 'earlier report or correction' }}
             <select name="target_id">
               <option value="">Leave unresolved</option>

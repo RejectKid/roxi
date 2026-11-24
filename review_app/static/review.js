@@ -21,6 +21,9 @@ for (const form of document.querySelectorAll("[data-review-write]")) {
         state: fields.get("state"),
         target_id: target ? Number(target) : null,
       });
+      if (fields.has("reported_time_seconds")) {
+        payload.reported_time_seconds = Number(fields.get("reported_time_seconds"));
+      }
     } else if (action === "transcript") {
       payload.body = fields.get("body");
     }

@@ -7,6 +7,7 @@ from .chat_types import Claim, Verdict
 from .extraction import subject_entries
 from .mcp_server import create_server
 from .query_models import EventPage, EvidenceResult
+from .reported_times import reported_time
 
 STATUS_PATTERNS = {
     "out_of_service": re.compile(r"\b(?:oos|out of service|not in service|closed for returns)\b", re.I),
@@ -83,6 +84,11 @@ def event_condition(event, events: dict, visited=frozenset()) -> str | None:
 
 def source_support(event, claims: dict[str, EvidenceResult], aliases: dict[str, list[str]]) -> bool:
     cited = [claims[key].excerpt for key in event.evidence_ids if key in claims]
+    names = aliases.get(event.subject_id, [])
+    if event.event_type == "time_report":
+        return any(reported_time(text, names) == (event.payload.reported_time_seconds, False) for text in cited)
+    if event.event_type == "correction" and event.payload.replacement_time_seconds is not None:
+        return any(reported_time(text, names) == (event.payload.replacement_time_seconds, True) for text in cited)
     if event.event_type == "acknowledgment":
         return any(re.search(r"\b(?:copy|roger|acknowledged)\b", text, re.I) for text in cited)
     if event.event_type == "correction":
@@ -127,8 +133,19 @@ def evaluate_claim(claim: Claim, main: dict[str, EvidenceResult], coverage: dict
         earlier = cited_events[1]
         link = relates(first, "corrects", earlier.event_id)
         valid = bool(first.event_type == "correction" and link and set(link.evidence_ids) <= main.keys()
+                     and first.payload.replacement_time_seconds is None
                      and claim.corrected_subject_id == earlier.subject_id and claim.subject_id == first.subject_id
                      and claim.reported_status == event_condition(first, events) and not superseded(first))
+    elif outcome == "supported_time_correction" and len(cited_events) == 2:
+        earlier = cited_events[1]
+        link = relates(first, "corrects", earlier.event_id)
+        previous = (earlier.payload.reported_time_seconds if earlier.event_type == "time_report" else
+                    earlier.payload.replacement_time_seconds if earlier.event_type == "correction" else None)
+        valid = bool(first.event_type == "correction" and link and set(link.evidence_ids) == main.keys()
+                     and not coverage and first.subject_id == earlier.subject_id == claim.subject_id
+                     and previous is not None and previous == claim.original_time_seconds
+                     and first.payload.replacement_time_seconds is not None
+                     and first.payload.replacement_time_seconds == claim.revised_time_seconds != previous)
     elif outcome == "supported_acknowledgment" and len(cited_events) == 2:
         target = cited_events[1]
         link = relates(first, "acknowledges", target.event_id)
@@ -150,6 +167,7 @@ def evaluate_claim(claim: Claim, main: dict[str, EvidenceResult], coverage: dict
         timed_reports = [event for event in events.values() if event.subject_id == claim.subject_id
                          and event.capture_offset_ms is not None
                          and (event.event_type == "status_report" or relates(event, "corrects"))
+                         and event_condition(event, events) is not None
                          and not superseded(event)]
         latest = max(timed_reports, key=lambda event: (event.capture_offset_ms, event.event_id), default=None)
         link = relates(first, "corrects")

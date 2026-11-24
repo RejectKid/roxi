@@ -11,18 +11,19 @@ from typing import Literal
 from . import query_models as model
 from . import query_service as service
 from .chat_types import Claim
-from .extraction import subject_entries, subjects
+from .extraction import subject_entries, subjects, timed_subjects
+from .reported_times import format_reported_time
 
 CLOCK = re.compile(r"(?<![\d:])(\d{1,4}):([0-5]\d)(?:\.(\d{1,3}))?(?![\d:])")
 CUE = re.compile(r"\bcue\s+([a-z][a-z\d-]*)\b", re.IGNORECASE)
 OUT = re.compile(r"\b(?:out of service|oos|closed)\b", re.IGNORECASE)
 IN = re.compile(r"\b(?:back in service|in service|return[- ]to[- ]service|open)\b", re.IGNORECASE)
 STATUS = {"out_of_service": "out of service", "in_service": "in service", "unknown": "status unspecified"}
-Purpose = Literal["status", "acknowledgment", "source", "search"]
+Purpose = Literal["status", "acknowledgment", "source", "search", "time_correction"]
 
 
 class LocalIntent(model.Input):
-    purpose: Purpose
+    purpose: Literal["status", "acknowledgment", "source", "search"]
     search_text: str | None = None
 
 
@@ -99,9 +100,15 @@ def plan_question(question: str, glossary: dict) -> QuestionPlan:
     status = "out_of_service" if OUT.search(question) else "in_service" if IN.search(question) else None
     unknown = bool(re.search(r"\b(?:untimed|unaligned|unknown (?:exercise )?time)\b", question, re.I))
     confirms = bool(re.search(r"\bconfirm(?:ed|ation)?\b", question, re.I))
-    if cue or unknown or re.search(r"\bwhere\b.*\b(?:report|recording|clip)\b", question, re.I):
+    fields = timed_subjects(glossary)
+    asks_correction = bool(re.search(r"\b(?:correct(?:ion|ed)|chang(?:e|ed)|revis(?:ion|ed))\b", question, re.I))
+    asks_ack = bool(re.search(r"\backnowledg\w*\b|\bcopy\b.*\brefer\b", question, re.I))
+    if not cue and not asks_ack and asks_correction and (subject in fields or (subject is None and len(fields) == 1)):
+        subject = subject or next(iter(fields))
+        purpose = "time_correction"
+    elif cue or unknown or re.search(r"\bwhere\b.*\b(?:report|recording|clip)\b", question, re.I):
         purpose = "source"
-    elif re.search(r"\backnowledg\w*\b|\bcopy\b.*\brefer\b", question, re.I):
+    elif asks_ack:
         purpose = "acknowledgment"
     elif status or group or confirms:
         purpose = "status"
@@ -155,6 +162,14 @@ def supporting_ids(event) -> list[str]:
     return link.evidence_ids if link else event.evidence_ids
 
 
+def elapsed_seconds(event) -> int | None:
+    if event.event_type == "time_report":
+        return event.payload.reported_time_seconds
+    if event.event_type == "correction":
+        return event.payload.replacement_time_seconds
+    return None
+
+
 class Answerer:
     def __init__(self, pin: model.RevisionRequest, question: str):
         self.pin = pin
@@ -181,6 +196,7 @@ class Answerer:
         reports = [
             event for event in self.events
             if event.capture_offset_ms is not None and self.relevant_subject(event)
+            and elapsed_seconds(event) is None
             and (event.event_type == "status_report" or correction_link(event))
             and not any(link.direction == "incoming" and link.type == "corrects" and link.review_state == "accepted"
                         for link in event.relationships)
@@ -225,6 +241,23 @@ class Answerer:
             reports = [event for event in reports if reported_status(event, self.by_id) == self.plan.status]
         if reports:
             return self.report_answer(reports[-1])
+        return self.no_evidence()
+
+    def time_correction_answer(self) -> tuple[str, Claim]:
+        for event in reversed(self.events):
+            if event.event_type != "correction" or not self.relevant_subject(event):
+                continue
+            revised = elapsed_seconds(event)
+            link = correction_link(event)
+            target = self.by_id.get(link.event_id) if link else None
+            earlier = elapsed_seconds(target) if target else None
+            if revised is None or earlier is None or revised == earlier:
+                continue
+            label = self.label(event.subject_id)
+            text = f"{label} was revised from {format_reported_time(earlier)} to {format_reported_time(revised)}."
+            return text, self.claim("supported_time_correction", subject_id=event.subject_id,
+                                    original_time_seconds=earlier, revised_time_seconds=revised,
+                                    event_ids=[event.event_id, target.event_id], evidence_ids=link.evidence_ids)
         return self.no_evidence()
 
     def report_answer(self, event) -> tuple[str, Claim]:
@@ -326,6 +359,7 @@ class Answerer:
 
     def answer(self) -> tuple[str, Claim, str]:
         action = {"status": self.status_answer, "acknowledgment": self.acknowledgment,
-                  "source": self.from_source, "search": self.from_source}[self.plan.purpose]
+                  "source": self.from_source, "search": self.from_source,
+                  "time_correction": self.time_correction_answer}[self.plan.purpose]
         text, claim = action()
         return text, claim, self.plan.parser

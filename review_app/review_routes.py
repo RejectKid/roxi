@@ -7,6 +7,7 @@ from typing import Annotated
 
 from . import review_store as store
 from . import pilot_access as access
+from .query_models import ReportedTime
 from .views import templates
 
 router = APIRouter(prefix="/exercises/{exercise_id}")
@@ -26,6 +27,7 @@ class ExtractRequest(BaseModel):
 class EventEdit(DraftRequest):
     subject_id: str | None = None
     reported_status: Literal["in_service", "out_of_service", "unknown"] | None = None
+    reported_time_seconds: ReportedTime | None = None
     state: State
     target_id: PositiveInt | None = None
 

@@ -1,6 +1,8 @@
 import re
 from dataclasses import dataclass
 
+from .reported_times import reported_time, time_replaces
+
 CORRECTION = re.compile(r"\bcorrection\b", re.IGNORECASE)
 ACKNOWLEDGMENT = re.compile(r"^(?:[^.,!?]{1,48},\s*)?(?:copy|roger|acknowledged)\b", re.IGNORECASE)
 BARE_ACKNOWLEDGMENT = re.compile(r"^(?:copy|roger|acknowledged)[.!]?$", re.IGNORECASE)
@@ -19,6 +21,7 @@ class Proposal:
     kind: str
     subject_id: str | None
     reported_status: str | None
+    reported_time_seconds: int | None = None
 
 
 def subject_entries(glossary: dict) -> list[dict]:
@@ -33,8 +36,12 @@ def subjects(glossary: dict) -> dict[str, str]:
     return {entry["subject_id"]: entry["label"] for entry in subject_entries(glossary)}
 
 
+def timed_subjects(glossary: dict) -> set[str]:
+    return {entry["subject_id"] for entry in subject_entries(glossary) if entry.get("value_type") == "elapsed_time"}
+
+
 class Extractor:
-    def __init__(self, glossary: dict):
+    def __init__(self, glossary: dict, *, elapsed_times: bool = False):
         owners: dict[str, set[str]] = {}
         for entry in subject_entries(glossary):
             aliases = entry.get("aliases")
@@ -42,6 +49,10 @@ class Extractor:
                 if isinstance(name, str) and name.strip():
                     owners.setdefault(name.strip().casefold(), set()).add(entry["subject_id"])
         self.aliases = {name: next(iter(ids)) if len(ids) == 1 else None for name, ids in owners.items()}
+        self.timed_fields = {
+            subject: [alias for alias, owner in self.aliases.items() if owner == subject]
+            for subject in timed_subjects(glossary)
+        } if elapsed_times else {}
         ordered_aliases = sorted(self.aliases, key=len, reverse=True)
         self.pattern = re.compile(
             r"(?<![\w-])(?:" + "|".join(map(re.escape, ordered_aliases)) + r")(?![\w-])", re.IGNORECASE
@@ -53,10 +64,15 @@ class Extractor:
         aliases = list(self.pattern.finditer(subject_text)) if self.pattern else []
         subject = self.aliases.get(aliases[-1].group().casefold()) if aliases else None
         value = {"out": "out_of_service", "in": "in_service", "other": "unknown"}[status.lastgroup] if status else None
+        timing = reported_time(body, self.timed_fields.get(subject, []))
+        if timing and timing[1]:
+            return Proposal("correction", subject, None, timing[0])
         if CORRECTION.search(body):
             return Proposal("correction", subject, value)
         if ACKNOWLEDGMENT.search(body):
             return Proposal("acknowledgment", subject, None)
+        if timing:
+            return Proposal("time_report", subject, None, timing[0])
         if value:
             return Proposal("status_report", subject, value)
         return None
@@ -71,12 +87,16 @@ def earlier(target: dict, event: dict) -> bool:
 
 
 def link_options(event: dict, events: list[dict]) -> list[dict]:
-    if event["kind"] == "status_report":
+    if event["kind"] in {"status_report", "time_report"}:
         return []
-    return [target for target in events
-            if target["kind"] in {"status_report", "correction"}
-            and target["state"] != "rejected"
-            and earlier(target, event)]
+    options = [target for target in events
+               if target["kind"] in {"status_report", "time_report", "correction"}
+               and target["state"] != "rejected" and earlier(target, event)]
+    if event["kind"] != "correction":
+        return options
+    if event.get("reported_time_seconds") is not None:
+        return [target for target in options if time_replaces(event, target)]
+    return [target for target in options if target.get("reported_time_seconds") is None]
 
 
 def link_candidates(event: dict, options: list[dict]) -> list[int]:

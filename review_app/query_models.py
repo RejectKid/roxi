@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from .importer import Slug
+from .reported_times import MAX_SECONDS
 
 MAX_BIGINT = 2**63 - 1
 MAX_INT = 2**31 - 1
@@ -14,9 +15,10 @@ EvidenceId = Annotated[str, StringConstraints(
     pattern=r"^s[1-9][0-9]{0,18}-r[1-9][0-9]{0,9}(?:-t[a-f0-9]{64})?$",
     max_length=98,
 )]
-EventType = Literal["status_report", "acknowledgment", "correction"]
+EventType = Literal["status_report", "time_report", "acknowledgment", "correction"]
 ReviewState = Literal["proposed", "accepted", "rejected"]
 ReportedStatus = Literal["in_service", "out_of_service", "unknown"]
+ReportedTime = Annotated[int, Field(ge=0, le=MAX_SECONDS, strict=True)]
 SourceKind = Literal["audio", "chat"]
 
 
@@ -46,7 +48,7 @@ class RecordFilters(PageFilters):
 
 class EventFilters(PageFilters):
     subject_id: Annotated[str, StringConstraints(min_length=1, max_length=160)] | None = None
-    event_types: Annotated[list[EventType], Field(max_length=3)] = Field(default_factory=list)
+    event_types: Annotated[list[EventType], Field(max_length=4)] = Field(default_factory=list)
     as_of_ms: Offset | None = None
     review_state: Literal["all", "proposed", "accepted", "rejected"] = "accepted"
 
@@ -139,6 +141,10 @@ class ReportPayload(BaseModel):
     reported_status: ReportedStatus
 
 
+class TimeReportPayload(BaseModel):
+    reported_time_seconds: ReportedTime
+
+
 class AcknowledgmentPayload(BaseModel):
     text: str
 
@@ -146,11 +152,17 @@ class AcknowledgmentPayload(BaseModel):
 class CorrectionPayload(BaseModel):
     replacement_subject_id: str | None
     replacement_reported_status: ReportedStatus | None
+    replacement_time_seconds: ReportedTime | None = None
 
 
 class ReportEvent(EventItem):
     event_type: Literal["status_report"] = "status_report"
     payload: ReportPayload
+
+
+class TimeReportEvent(EventItem):
+    event_type: Literal["time_report"] = "time_report"
+    payload: TimeReportPayload
 
 
 class AcknowledgmentEvent(EventItem):
@@ -163,7 +175,8 @@ class CorrectionEvent(EventItem):
     payload: CorrectionPayload
 
 
-PublishedEvent = Annotated[ReportEvent | AcknowledgmentEvent | CorrectionEvent, Field(discriminator="event_type")]
+PublishedEvent = Annotated[ReportEvent | TimeReportEvent | AcknowledgmentEvent | CorrectionEvent,
+                           Field(discriminator="event_type")]
 
 
 class EventPage(RevisionRef):

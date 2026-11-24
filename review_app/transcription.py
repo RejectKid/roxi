@@ -11,6 +11,7 @@ from .storage import ROOT
 
 DEFAULT_MODEL = "small.en"
 CACHE = ROOT / ".local" / "models"
+PROFILES = ("standard", "radio")
 
 
 def timestamp(milliseconds: int) -> str:
@@ -34,22 +35,33 @@ def split_at_silence(segment):
         yield words[0].start, words[-1].end, "".join(item.word for item in words)
 
 
-def transcribe_recording(model, source: Path, language: str) -> tuple[str, dict]:
-    started = perf_counter()
+def standard_cues(model, source: Path, language: str):
     segments, info = model.transcribe(
         str(source), language=language, beam_size=5, vad_filter=True,
         vad_parameters={"min_silence_duration_ms": 750, "speech_pad_ms": 200},
         condition_on_previous_text=False, word_timestamps=True,
     )
-    duration_ms = round(info.duration * 1000)
+    return info.duration, (cue for segment in segments for cue in split_at_silence(segment))
+
+
+def transcribe_recording(model, source: Path, language: str, *, profile: str = "standard") -> tuple[str, dict]:
+    started = perf_counter()
+    if profile == "radio":
+        from .radio_transcription import radio_cues
+
+        duration, segments = radio_cues(model, source, language)
+    elif profile == "standard":
+        duration, segments = standard_cues(model, source, language)
+    else:
+        raise ValueError(f"Unknown transcription profile: {profile}")
+    duration_ms = round(duration * 1000)
     cues = []
-    for segment in segments:
-        for start, end, text in split_at_silence(segment):
-            start_ms = max(0, round(start * 1000))
-            end_ms = min(duration_ms, round(end * 1000))
-            body = " ".join(text.split())
-            if body and start_ms < end_ms:
-                cues.append((start_ms, end_ms, body))
+    for start, end, text in segments:
+        start_ms = max(0, round(start * 1000))
+        end_ms = min(duration_ms, round(end * 1000))
+        body = " ".join(text.split())
+        if body and start_ms < end_ms:
+            cues.append((start_ms, end_ms, body))
     sections = [
         f"S{number:03}\n{timestamp(start)} --> {timestamp(end)}\n{escape(text, quote=False)}"
         for number, (start, end, text) in enumerate(sorted(cues), 1)
@@ -60,7 +72,8 @@ def transcribe_recording(model, source: Path, language: str) -> tuple[str, dict]
 
 
 def build_bundle(manifest_path: Path, output: Path, *, model_name: str = DEFAULT_MODEL,
-                 language: str = "en", exercise_id: str | None = None, offline: bool = False) -> dict:
+                 language: str = "en", exercise_id: str | None = None, offline: bool = False,
+                 profile: str = "standard") -> dict:
     from faster_whisper import WhisperModel
 
     manifest_path = manifest_path.resolve(strict=True)
@@ -83,7 +96,7 @@ def build_bundle(manifest_path: Path, output: Path, *, model_name: str = DEFAULT
     model = WhisperModel(model_name, device="cpu", compute_type="int8", cpu_threads=threads,
                          download_root=str(CACHE), local_files_only=offline)
     report = {"model": model_name, "engine": "faster-whisper", "device": "cpu", "compute_type": "int8",
-              "language": language, "tracks": {}}
+              "language": language, "profile": profile, "tracks": {}}
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".transcription-", dir=output.parent) as working:
         bundle = Path(working) / "bundle"
@@ -101,7 +114,7 @@ def build_bundle(manifest_path: Path, output: Path, *, model_name: str = DEFAULT
             metadata["file"] = f"sources/{filename}"
             if isinstance(source, AudioSource):
                 transcript = f"sources/{source.source_key}.vtt"
-                vtt, details = transcribe_recording(model, sources / filename, language)
+                vtt, details = transcribe_recording(model, sources / filename, language, profile=profile)
                 (bundle / transcript).write_text(vtt, encoding="utf-8")
                 metadata["transcript_file"] = transcript
                 report["tracks"][source.source_key] = details

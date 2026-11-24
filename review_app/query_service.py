@@ -267,10 +267,13 @@ def event_item(event: dict, links: list[model.Relationship], conflicting: list[i
     }
     if event["kind"] == "status_report":
         return model.ReportEvent(**common, payload=model.ReportPayload(reported_status=event["reported_status"]))
+    if event["kind"] == "time_report":
+        return model.TimeReportEvent(**common, payload=model.TimeReportPayload(reported_time_seconds=event["reported_time_seconds"]))
     if event["kind"] == "acknowledgment":
         return model.AcknowledgmentEvent(**common, payload=model.AcknowledgmentPayload(text=event["body"]))
     return model.CorrectionEvent(**common, payload=model.CorrectionPayload(
-        replacement_subject_id=event["subject_id"], replacement_reported_status=event["reported_status"]
+        replacement_subject_id=event["subject_id"], replacement_reported_status=event["reported_status"],
+        replacement_time_seconds=event.get("reported_time_seconds"),
     ))
 
 
