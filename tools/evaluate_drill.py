@@ -16,9 +16,6 @@ ROOT = Path(__file__).resolve().parents[1]
 REFERENCE = ROOT / "fixtures" / "drill-01"
 sys.path.insert(0, str(ROOT))
 
-from review_app.extraction import subject_entries
-from review_app.importer import parse_vtt
-
 WORDS = re.compile(r"[a-z0-9]+")
 OOS = re.compile(r"\b(?:oos|o[\s.]+o[\s.]+s|out of service|not in service|closed for returns)\b", re.I)
 IN_SERVICE = re.compile(r"\b(?<!not )(?:in service|open for returns)\b", re.I)
@@ -40,6 +37,8 @@ def edit_distance(reference: list[str], generated: list[str]) -> int:
 
 
 def critical_terms(text: str, glossary: dict) -> set[str]:
+    from review_app.extraction import subject_entries
+
     normalized = " ".join(words(text))
     padded = f" {normalized} "
     found = {entry["subject_id"] for entry in subject_entries(glossary)
@@ -53,6 +52,8 @@ def critical_terms(text: str, glossary: dict) -> set[str]:
 
 
 def score_asr(bundle: Path) -> dict:
+    from review_app.importer import parse_vtt
+
     root = REFERENCE / "input"
     reference = json.loads((root / "exercise.json").read_text(encoding="utf-8"))
     generated = json.loads((bundle / "exercise.json").read_text(encoding="utf-8"))
@@ -112,7 +113,7 @@ def source_hash(path: Path) -> str:
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
-def check_audio_bytes(url: str, path: Path, start_ms: int, end_ms: int) -> bool:
+def check_audio_bytes(url: str, path: Path, start_ms: int, end_ms: int, *, headers: dict | None = None) -> bool:
     # Build-DrillAudio.ps1 writes a 44-byte PCM header, followed directly by the samples.
     with path.open("rb") as source:
         header = source.read(44)
@@ -123,7 +124,7 @@ def check_audio_bytes(url: str, path: Path, start_ms: int, end_ms: int) -> bool:
         last = 44 + end_ms * bytes_per_second // 1000 - 1
         source.seek(first)
         expected = source.read(last - first + 1)
-    with urlopen(Request(url, headers={"Range": f"bytes={first}-{last}"}), timeout=10) as audio:
+    with urlopen(Request(url, headers={**(headers or {}), "Range": f"bytes={first}-{last}"}), timeout=10) as audio:
         return (audio.status == 206
                 and audio.headers["Content-Range"] == f"bytes {first}-{last}/{path.stat().st_size}"
                 and audio.read() == expected and len(expected) == last - first + 1)

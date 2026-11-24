@@ -43,6 +43,7 @@ The default app and database bind to loopback. PostgreSQL persists in the Compos
 | Set up workspace accounts, grant source access, and operate a pilot | [Pilot access and operations](docs/PILOT-OPERATIONS.md) |
 | Query published events and open source evidence | [HTTP and MCP examples](docs/API.md) |
 | Run local speech-to-text or repeat the answer-key evaluation | [Transcription and pilot evaluation](docs/PILOT-EVALUATION.md) |
+| Evaluate transcription and evidence playback on recorded radio | [Apollo 11 replay benchmark](docs/APOLLO-11-EVALUATION.md) |
 | Fix setup, playback, or MCP problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Run tests or prepare a release | [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) |
 | Understand the architecture and next milestones | [Technical specification](docs/PROJECT-SPEC.md) · [Implementation plan](docs/IMPLEMENTATION-PLAN.md) · [Live data roadmap](docs/LIVE-ROADMAP.md) |
