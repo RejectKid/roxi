@@ -89,7 +89,9 @@
               {% endfor %}
             </select>
           </label>
-          {% if event.reported_time_seconds is not none %}
+          {% if event.radio_speed_limit %}
+          <p class="review-hint">{{ event.radio_speed_limit.knots }} knots until {{ event.radio_speed_limit.until }}</p>
+          {% elif event.reported_time_seconds is not none %}
           <label>{{ 'Replacement elapsed time' if event.kind == 'correction' else 'Reported elapsed time' }}
             <input name="reported_time_seconds" type="number" min="0" max="3599999" step="1"
                    value="{{ event.reported_time_seconds }}" required>

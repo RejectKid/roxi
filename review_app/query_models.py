@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from .importer import Slug
+from .radio_messages import RadioSpeedLimit
 from .reported_times import MAX_SECONDS
 
 MAX_BIGINT = 2**63 - 1
@@ -15,7 +16,7 @@ EvidenceId = Annotated[str, StringConstraints(
     pattern=r"^s[1-9][0-9]{0,18}-r[1-9][0-9]{0,9}(?:-t[a-f0-9]{64})?$",
     max_length=98,
 )]
-EventType = Literal["status_report", "time_report", "acknowledgment", "correction"]
+EventType = Literal["status_report", "time_report", "radio_report", "acknowledgment", "correction"]
 ReviewState = Literal["proposed", "accepted", "rejected"]
 ReportedStatus = Literal["in_service", "out_of_service", "unknown"]
 ReportedTime = Annotated[int, Field(ge=0, le=MAX_SECONDS, strict=True)]
@@ -48,7 +49,7 @@ class RecordFilters(PageFilters):
 
 class EventFilters(PageFilters):
     subject_id: Annotated[str, StringConstraints(min_length=1, max_length=160)] | None = None
-    event_types: Annotated[list[EventType], Field(max_length=4)] = Field(default_factory=list)
+    event_types: Annotated[list[EventType], Field(max_length=5)] = Field(default_factory=list)
     as_of_ms: Offset | None = None
     review_state: Literal["all", "proposed", "accepted", "rejected"] = "accepted"
 
@@ -145,14 +146,20 @@ class TimeReportPayload(BaseModel):
     reported_time_seconds: ReportedTime
 
 
+class RadioReportPayload(BaseModel):
+    speed_limit: RadioSpeedLimit
+
+
 class AcknowledgmentPayload(BaseModel):
     text: str
+    speed_limit: RadioSpeedLimit | None = None
 
 
 class CorrectionPayload(BaseModel):
     replacement_subject_id: str | None
     replacement_reported_status: ReportedStatus | None
     replacement_time_seconds: ReportedTime | None = None
+    replacement_speed_limit: RadioSpeedLimit | None = None
 
 
 class ReportEvent(EventItem):
@@ -165,6 +172,11 @@ class TimeReportEvent(EventItem):
     payload: TimeReportPayload
 
 
+class RadioReportEvent(EventItem):
+    event_type: Literal["radio_report"] = "radio_report"
+    payload: RadioReportPayload
+
+
 class AcknowledgmentEvent(EventItem):
     event_type: Literal["acknowledgment"] = "acknowledgment"
     payload: AcknowledgmentPayload
@@ -175,7 +187,7 @@ class CorrectionEvent(EventItem):
     payload: CorrectionPayload
 
 
-PublishedEvent = Annotated[ReportEvent | TimeReportEvent | AcknowledgmentEvent | CorrectionEvent,
+PublishedEvent = Annotated[ReportEvent | TimeReportEvent | RadioReportEvent | AcknowledgmentEvent | CorrectionEvent,
                            Field(discriminator="event_type")]
 
 

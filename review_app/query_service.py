@@ -248,7 +248,7 @@ def published_links(events: list[dict], cutoff: int | None, review_state: str) -
         common = {
             "type": "acknowledges" if event["kind"] == "acknowledgment" else "corrects",
             "review_state": event["state"],
-            "evidence_ids": [event_evidence(target), event_evidence(event)],
+            "evidence_ids": list(dict.fromkeys((event_evidence(target), event_evidence(event)))),
         }
         for origin, other, direction in ((event, target, "outgoing"), (target, event, "incoming")):
             edges[origin["id"]].append(model.Relationship(
@@ -269,11 +269,17 @@ def event_item(event: dict, links: list[model.Relationship], conflicting: list[i
         return model.ReportEvent(**common, payload=model.ReportPayload(reported_status=event["reported_status"]))
     if event["kind"] == "time_report":
         return model.TimeReportEvent(**common, payload=model.TimeReportPayload(reported_time_seconds=event["reported_time_seconds"]))
+    speed_limit = event.get("radio_speed_limit")
+    if event["kind"] == "radio_report":
+        return model.RadioReportEvent(**common, payload=model.RadioReportPayload(speed_limit=speed_limit))
     if event["kind"] == "acknowledgment":
-        return model.AcknowledgmentEvent(**common, payload=model.AcknowledgmentPayload(text=event["body"]))
+        return model.AcknowledgmentEvent(**common, payload=model.AcknowledgmentPayload(
+            text=event["body"], speed_limit=speed_limit,
+        ))
     return model.CorrectionEvent(**common, payload=model.CorrectionPayload(
         replacement_subject_id=event["subject_id"], replacement_reported_status=event["reported_status"],
         replacement_time_seconds=event.get("reported_time_seconds"),
+        replacement_speed_limit=speed_limit,
     ))
 
 

@@ -1,10 +1,11 @@
+from collections import defaultdict
 from dataclasses import dataclass
 
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from .extraction import Extractor, describe_review, link_options, subjects, timed_subjects
+from .extraction import Extractor, describe_review, link_options, radio_readback, subjects, timed_subjects
 from .live_chat import registered_room
 from .reported_times import time_replaces
 from .storage import EDITOR_DSN, connect_read
@@ -62,11 +63,12 @@ def event_rows(conn, draft: dict) -> list[dict]:
         "SELECT * FROM review_event WHERE exercise_id = %s AND source_file_id = ANY(%s)",
         (exercise_id, draft["source_file_ids"]),
     ).fetchall()
-    by_source = {(event["source_file_id"], event["ordinal"]): event for event in events}
+    by_source = defaultdict(list)
+    for event in sorted(events, key=lambda item: item["clause"]):
+        by_source[event["source_file_id"], event["ordinal"]].append(event)
     ordered = []
     for record in records:
-        event = by_source.get((record["source_file_id"], record["ordinal"]))
-        if event is not None:
+        for event in by_source.get((record["source_file_id"], record["ordinal"]), ()):
             event.update({key: record[key] for key in ("capture_offset_ms", "audio_start_ms", "audio_end_ms",
                                                        "source_kind", "original_name", "cue_id", "speaker")})
             event["body"] = record["edited_body"] or record["body"]
@@ -79,6 +81,12 @@ def bump_version(conn, exercise_id: str) -> int:
         "UPDATE review_draft SET version = version + 1 WHERE exercise_id = %s RETURNING version",
         (exercise_id,),
     ).fetchone()["version"]
+
+
+def proposal_values(exercise_id, record, clause, proposal):
+    speed_limit = Jsonb(proposal.radio_speed_limit.model_dump()) if proposal.radio_speed_limit else None
+    return (exercise_id, record["source_file_id"], record["ordinal"], clause, proposal.kind,
+            proposal.subject_id, proposal.reported_status, proposal.reported_time_seconds, speed_limit)
 
 
 def start_or_refresh(exercise_id: str, version: int | None) -> dict:
@@ -107,21 +115,37 @@ def start_or_refresh(exercise_id: str, version: int | None) -> dict:
             )
         extractor = Extractor(glossary, elapsed_times=True)
         proposals = []
+        previous_corrections = {}
         for record in record_rows(conn, exercise_id, source_ids):
-            proposal = extractor.extract(record["edited_body"] or record["body"])
+            source_id = record["source_file_id"]
+            body = record["edited_body"] or record["body"]
+            previous = previous_corrections.pop(source_id, None)
+            pair = extractor.extract_radio(body) if record["source_kind"] == "audio" else None
+            if pair:
+                original, proposal = pair
+                previous_corrections[source_id] = (record, proposal)
+                proposals.append(proposal_values(exercise_id, record, -1, original))
+            else:
+                readback = radio_readback(body, record, *previous) if previous else None
+                proposal = readback or extractor.extract(body)
             if proposal is not None:
-                proposals.append((exercise_id, record["source_file_id"], record["ordinal"],
-                                  proposal.kind, proposal.subject_id, proposal.reported_status, proposal.reported_time_seconds))
+                proposals.append(proposal_values(exercise_id, record, 0, proposal))
         with conn.cursor() as cursor:
             cursor.executemany(
                 """
-                INSERT INTO review_event (exercise_id, source_file_id, ordinal, kind, subject_id,
-                                          reported_status, reported_time_seconds)
-                VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (exercise_id, source_file_id, ordinal)
+                INSERT INTO review_event (exercise_id, source_file_id, ordinal, clause, kind, subject_id,
+                                          reported_status, reported_time_seconds, radio_speed_limit)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (exercise_id, source_file_id, ordinal, clause)
                 DO UPDATE SET kind = EXCLUDED.kind, subject_id = EXCLUDED.subject_id, reported_status = NULL,
-                              reported_time_seconds = EXCLUDED.reported_time_seconds
-                WHERE review_event.state = 'proposed' AND review_event.kind = 'acknowledgment'
-                  AND review_event.target_id IS NULL AND EXCLUDED.reported_time_seconds IS NOT NULL
+                              reported_time_seconds = EXCLUDED.reported_time_seconds,
+                              radio_speed_limit = EXCLUDED.radio_speed_limit
+                WHERE review_event.state = 'proposed' AND review_event.target_id IS NULL AND (
+                    (review_event.kind = 'acknowledgment' AND EXCLUDED.reported_time_seconds IS NOT NULL)
+                    OR (EXCLUDED.radio_speed_limit IS NOT NULL
+                        AND (review_event.kind, review_event.radio_speed_limit)
+                            IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED.radio_speed_limit))
+                )
                 """,
                 proposals,
             )
@@ -189,11 +213,16 @@ def save_event(exercise_id: str, event_id: int, version: int, subject_id: str | 
             raise ReviewError(422, "Choose the reported status.")
         if event["kind"] == "acknowledgment" and reported_status is not None:
             raise ReviewError(422, "An acknowledgment records receipt.")
-        if event["kind"] == "correction" and state == "accepted" and subject_id is None and reported_status is None:
+        radio = event["radio_speed_limit"]
+        if radio is not None and reported_status is not None:
+            raise ReviewError(422, "This radio event records an instruction or readback.")
+        if (event["kind"] == "correction" and state == "accepted" and subject_id is None
+                and reported_status is None and radio is None):
             raise ReviewError(422, "Provide the replacement subject or status before accepting the correction.")
         revised = {**event, "subject_id": subject_id, "reported_time_seconds": reported_time_seconds}
-        if reported_time_seconds is not None and event["kind"] == "correction" and state == "accepted" and target_id is None:
-            raise ReviewError(422, "Choose the earlier time report before accepting the correction.")
+        if (event["kind"] in {"acknowledgment", "correction"} and state == "accepted" and target_id is None
+                and (reported_time_seconds is not None or radio is not None)):
+            raise ReviewError(422, "Choose the linked report or correction before accepting this event.")
         if target_id is not None:
             target = next((item for item in link_options(revised, events) if item["id"] == target_id), None)
             if target is None:
@@ -202,6 +231,10 @@ def save_event(exercise_id: str, event_id: int, version: int, subject_id: str | 
                 raise ReviewError(422, "Accept the linked event first, or save this event without a link.")
         if state != "accepted" and any(item["state"] == "accepted" and item["target_id"] == event_id for item in events):
             raise ReviewError(422, "Update the accepted links to this event before changing its review decision.")
+        if radio is not None and subject_id != event["subject_id"] and any(
+            item["state"] == "accepted" and item["target_id"] == event_id for item in events
+        ):
+            raise ReviewError(422, "Update the accepted links to this radio event before changing its subject.")
         if reported_time_seconds is not None and any(
             item["state"] == "accepted" and item["kind"] == "correction" and item["target_id"] == event_id
             and not time_replaces(item, revised) for item in events

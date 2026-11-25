@@ -7,6 +7,7 @@ from .chat_types import Claim, Verdict
 from .extraction import subject_entries
 from .mcp_server import create_server
 from .query_models import EventPage, EvidenceResult
+from .radio_messages import inline_speed_correction, speed_readback
 from .reported_times import reported_time
 
 STATUS_PATTERNS = {
@@ -89,7 +90,13 @@ def source_support(event, claims: dict[str, EvidenceResult], aliases: dict[str, 
         return any(reported_time(text, names) == (event.payload.reported_time_seconds, False) for text in cited)
     if event.event_type == "correction" and event.payload.replacement_time_seconds is not None:
         return any(reported_time(text, names) == (event.payload.replacement_time_seconds, True) for text in cited)
+    if event.event_type == "radio_report":
+        return any(pair[0] == event.payload.speed_limit for text in cited if (pair := inline_speed_correction(text)))
+    if event.event_type == "correction" and event.payload.replacement_speed_limit is not None:
+        return any(pair[1] == event.payload.replacement_speed_limit for text in cited if (pair := inline_speed_correction(text)))
     if event.event_type == "acknowledgment":
+        if event.payload.speed_limit is not None:
+            return any(speed_readback(text) == event.payload.speed_limit for text in cited)
         return any(re.search(r"\b(?:copy|roger|acknowledged)\b", text, re.I) for text in cited)
     if event.event_type == "correction":
         return any(re.search(r"\bcorrection\b", text, re.I)
@@ -133,7 +140,7 @@ def evaluate_claim(claim: Claim, main: dict[str, EvidenceResult], coverage: dict
         earlier = cited_events[1]
         link = relates(first, "corrects", earlier.event_id)
         valid = bool(first.event_type == "correction" and link and set(link.evidence_ids) <= main.keys()
-                     and first.payload.replacement_time_seconds is None
+                     and first.payload.replacement_time_seconds is None and first.payload.replacement_speed_limit is None
                      and claim.corrected_subject_id == earlier.subject_id and claim.subject_id == first.subject_id
                      and claim.reported_status == event_condition(first, events) and not superseded(first))
     elif outcome == "supported_time_correction" and len(cited_events) == 2:
@@ -146,11 +153,33 @@ def evaluate_claim(claim: Claim, main: dict[str, EvidenceResult], coverage: dict
                      and previous is not None and previous == claim.original_time_seconds
                      and first.payload.replacement_time_seconds is not None
                      and first.payload.replacement_time_seconds == claim.revised_time_seconds != previous)
+    elif outcome == "supported_radio_correction" and len(cited_events) in {2, 3}:
+        original = cited_events[1]
+        link = relates(first, "corrects", original.event_id)
+        valid = bool(first.event_type == "correction" and original.event_type == "radio_report" and link
+                     and not coverage and first.subject_id == original.subject_id == claim.subject_id
+                     and first.evidence_ids == original.evidence_ids == link.evidence_ids
+                     and original.payload.speed_limit == claim.original_speed_limit
+                     and first.payload.replacement_speed_limit == claim.revised_speed_limit
+                     and claim.original_speed_limit != claim.revised_speed_limit)
+        refs = set(first.evidence_ids)
+        if len(cited_events) == 3:
+            readback = cited_events[2]
+            valid = (valid and readback.event_type == "acknowledgment"
+                     and readback.payload.speed_limit == claim.revised_speed_limit
+                     and readback.subject_id == claim.subject_id and bool(relates(readback, "acknowledges", first.event_id))
+                     and refs.isdisjoint(readback.evidence_ids))
+            refs.update(readback.evidence_ids)
+        valid = valid and refs == main.keys()
     elif outcome == "supported_acknowledgment" and len(cited_events) == 2:
         target = cited_events[1]
         link = relates(first, "acknowledges", target.event_id)
         valid = bool(first.event_type == "acknowledgment" and link and set(link.evidence_ids) <= main.keys()
                      and claim.subject_id == target.subject_id and claim.target_evidence_id in target.evidence_ids
+                     and claim.revised_speed_limit == first.payload.speed_limit
+                     and (first.payload.speed_limit is None or (
+                         target.event_type == "correction" and target.payload.replacement_speed_limit == first.payload.speed_limit
+                     ))
                      and any(main[key].speaker == claim.speaker for key in first.evidence_ids if key in main))
     elif outcome == "unresolved":
         candidate_refs = {key for event_id in first.candidate_event_ids if event_id in events

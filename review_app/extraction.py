@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 
+from .radio_messages import RESPONSE_WINDOW_MS, RadioSpeedLimit, inline_speed_correction, speed_readback
 from .reported_times import reported_time, time_replaces
 
 CORRECTION = re.compile(r"\bcorrection\b", re.IGNORECASE)
@@ -22,6 +23,7 @@ class Proposal:
     subject_id: str | None
     reported_status: str | None
     reported_time_seconds: int | None = None
+    radio_speed_limit: RadioSpeedLimit | None = None
 
 
 def subject_entries(glossary: dict) -> list[dict]:
@@ -58,6 +60,16 @@ class Extractor:
             r"(?<![\w-])(?:" + "|".join(map(re.escape, ordered_aliases)) + r")(?![\w-])", re.IGNORECASE
         ) if ordered_aliases else None
 
+    def extract_radio(self, body: str) -> tuple[Proposal, Proposal] | None:
+        limits = inline_speed_correction(body)
+        if limits is None:
+            return None
+        aliases = list(self.pattern.finditer(body)) if self.pattern else []
+        subject = self.aliases.get(aliases[0].group().casefold()) if aliases else None
+        original, replacement = limits
+        return (Proposal("radio_report", subject, None, radio_speed_limit=original),
+                Proposal("correction", subject, None, radio_speed_limit=replacement))
+
     def extract(self, body: str) -> Proposal | None:
         status = STATUS.search(body)
         subject_text = body[:status.start()] if status else body
@@ -83,15 +95,43 @@ def earlier(target: dict, event: dict) -> bool:
     event_time = event["capture_offset_ms"]
     if source_time is not None and event_time is not None and source_time != event_time:
         return source_time < event_time
-    return target["source_file_id"] == event["source_file_id"] and target["ordinal"] < event["ordinal"]
+    return target["source_file_id"] == event["source_file_id"] and (
+        target["ordinal"], target.get("clause", 0)
+    ) < (event["ordinal"], event.get("clause", 0))
+
+
+def radio_response_follows(response: dict, call: dict) -> bool:
+    if response["source_file_id"] != call["source_file_id"] or response["ordinal"] != call["ordinal"] + 1:
+        return False
+    first, last = response.get("audio_start_ms"), call.get("audio_end_ms")
+    speaker, caller = response.get("speaker"), call.get("speaker")
+    return (first is not None and last is not None and -250 <= first - last <= RESPONSE_WINDOW_MS
+            and (not speaker or not caller or speaker.casefold() != caller.casefold()))
+
+
+def radio_readback(body: str, response: dict, call: dict, correction: Proposal) -> Proposal | None:
+    value = speed_readback(body)
+    if value and value == correction.radio_speed_limit and radio_response_follows(response, call):
+        return Proposal("acknowledgment", correction.subject_id, None, radio_speed_limit=value)
+    return None
 
 
 def link_options(event: dict, events: list[dict]) -> list[dict]:
-    if event["kind"] in {"status_report", "time_report"}:
+    if event["kind"] in {"status_report", "time_report", "radio_report"}:
         return []
     options = [target for target in events
-               if target["kind"] in {"status_report", "time_report", "correction"}
+               if target["kind"] in {"status_report", "time_report", "radio_report", "correction"}
                and target["state"] != "rejected" and earlier(target, event)]
+    radio = event.get("radio_speed_limit")
+    if radio is not None:
+        if event["kind"] == "acknowledgment":
+            return [target for target in options if target["kind"] == "correction"
+                    and target.get("radio_speed_limit") == radio
+                    and target["subject_id"] == event["subject_id"] and radio_response_follows(event, target)]
+        return [target for target in options if target["kind"] == "radio_report"
+                and target["source_file_id"] == event["source_file_id"] and target["ordinal"] == event["ordinal"]
+                and target["subject_id"] == event["subject_id"] and target["radio_speed_limit"] != radio]
+    options = [target for target in options if target.get("radio_speed_limit") is None]
     if event["kind"] != "correction":
         return options
     if event.get("reported_time_seconds") is not None:
@@ -100,6 +140,8 @@ def link_options(event: dict, events: list[dict]) -> list[dict]:
 
 
 def link_candidates(event: dict, options: list[dict]) -> list[int]:
+    if event.get("radio_speed_limit") is not None:
+        return [target["id"] for target in options]
     if event["capture_offset_ms"] is None:
         return []
     nearby = [target for target in options if target["capture_offset_ms"] is not None

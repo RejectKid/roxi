@@ -12,6 +12,7 @@ from . import query_models as model
 from . import query_service as service
 from .chat_types import Claim
 from .extraction import subject_entries, subjects, timed_subjects
+from .radio_messages import format_limit
 from .reported_times import format_reported_time
 
 CLOCK = re.compile(r"(?<![\d:])(\d{1,4}):([0-5]\d)(?:\.(\d{1,3}))?(?![\d:])")
@@ -19,7 +20,7 @@ CUE = re.compile(r"\bcue\s+([a-z][a-z\d-]*)\b", re.IGNORECASE)
 OUT = re.compile(r"\b(?:out of service|oos|closed)\b", re.IGNORECASE)
 IN = re.compile(r"\b(?:back in service|in service|return[- ]to[- ]service|open)\b", re.IGNORECASE)
 STATUS = {"out_of_service": "out of service", "in_service": "in service", "unknown": "status unspecified"}
-Purpose = Literal["status", "acknowledgment", "source", "search", "time_correction"]
+Purpose = Literal["status", "acknowledgment", "source", "search", "time_correction", "radio_correction"]
 
 
 class LocalIntent(model.Input):
@@ -102,8 +103,11 @@ def plan_question(question: str, glossary: dict) -> QuestionPlan:
     confirms = bool(re.search(r"\bconfirm(?:ed|ation)?\b", question, re.I))
     fields = timed_subjects(glossary)
     asks_correction = bool(re.search(r"\b(?:correct(?:ion|ed)|chang(?:e|ed)|revis(?:ion|ed))\b", question, re.I))
-    asks_ack = bool(re.search(r"\backnowledg\w*\b|\bcopy\b.*\brefer\b", question, re.I))
-    if not cue and not asks_ack and asks_correction and (subject in fields or (subject is None and len(fields) == 1)):
+    asks_readback = bool(re.search(r"\bread ?back\b|\bread\b.{0,12}\bback\b", question, re.I))
+    asks_ack = asks_readback or bool(re.search(r"\backnowledg\w*\b|\bcopy\b.*\brefer\b", question, re.I))
+    if not cue and asks_correction and (asks_readback or re.search(r"\b(?:speed|radio|instruction)\b", question, re.I)):
+        purpose = "radio_correction"
+    elif not cue and not asks_ack and asks_correction and (subject in fields or (subject is None and len(fields) == 1)):
         subject = subject or next(iter(fields))
         purpose = "time_correction"
     elif cue or unknown or re.search(r"\bwhere\b.*\b(?:report|recording|clip)\b", question, re.I):
@@ -197,6 +201,7 @@ class Answerer:
             event for event in self.events
             if event.capture_offset_ms is not None and self.relevant_subject(event)
             and elapsed_seconds(event) is None
+            and not (event.event_type == "correction" and event.payload.replacement_speed_limit is not None)
             and (event.event_type == "status_report" or correction_link(event))
             and not any(link.direction == "incoming" and link.type == "corrects" and link.review_state == "accepted"
                         for link in event.relationships)
@@ -260,6 +265,34 @@ class Answerer:
                                     event_ids=[event.event_id, target.event_id], evidence_ids=link.evidence_ids)
         return self.no_evidence()
 
+    def radio_correction_answer(self) -> tuple[str, Claim]:
+        for event in reversed(self.events):
+            if (event.event_type != "correction" or not self.relevant_subject(event)
+                    or event.payload.replacement_speed_limit is None):
+                continue
+            link = correction_link(event)
+            original = self.by_id.get(link.event_id) if link else None
+            if original is None or original.event_type != "radio_report":
+                continue
+            before = original.payload.speed_limit
+            after = event.payload.replacement_speed_limit
+            event_ids = [event.event_id, original.event_id]
+            refs = list(link.evidence_ids)
+            text = f"The recorded call corrected {format_limit(before)} to {format_limit(after)}."
+            readback = next((item for item in self.events if item.event_type == "acknowledgment"
+                             and item.payload.speed_limit == after and any(
+                                 edge.direction == "outgoing" and edge.type == "acknowledges"
+                                 and edge.review_state == "accepted" and edge.event_id == event.event_id
+                                 for edge in item.relationships)), None)
+            if readback:
+                text += f" The next transmission read back {format_limit(after)}."
+                event_ids.append(readback.event_id)
+                refs.extend(readback.evidence_ids)
+            return text, self.claim("supported_radio_correction", subject_id=event.subject_id,
+                                    original_speed_limit=before, revised_speed_limit=after,
+                                    event_ids=event_ids, evidence_ids=distinct(refs))
+        return self.no_evidence()
+
     def report_answer(self, event) -> tuple[str, Claim]:
         status = reported_status(event, self.by_id)
         link = correction_link(event)
@@ -308,10 +341,12 @@ class Answerer:
             received_status = reported_status(target, self.by_id)
             if received_status and received_status != "unknown":
                 text += f" The {kind} said {self.label(link.subject_id)} was {STATUS[received_status]}."
+            if event.payload.speed_limit is not None:
+                text += f" The readback repeated {format_limit(event.payload.speed_limit)}."
             text += " The acknowledgment records receipt."
             return text, self.claim(
                 "supported_acknowledgment", speaker=record.speaker, subject_id=link.subject_id,
-                target_evidence_id=target.evidence_ids[0], event_ids=[event.event_id, target.event_id],
+                revised_speed_limit=event.payload.speed_limit, target_evidence_id=target.evidence_ids[0], event_ids=[event.event_id, target.event_id],
                 evidence_ids=link.evidence_ids,
             )
         candidates = [self.by_id[key] for key in event.candidate_event_ids if key in self.by_id]
@@ -360,6 +395,6 @@ class Answerer:
     def answer(self) -> tuple[str, Claim, str]:
         action = {"status": self.status_answer, "acknowledgment": self.acknowledgment,
                   "source": self.from_source, "search": self.from_source,
-                  "time_correction": self.time_correction_answer}[self.plan.purpose]
+                  "time_correction": self.time_correction_answer, "radio_correction": self.radio_correction_answer}[self.plan.purpose]
         text, claim = action()
         return text, claim, self.plan.parser

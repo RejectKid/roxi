@@ -7,7 +7,7 @@ from .storage import ROOT
 
 templates = Jinja2Templates(directory=ROOT / "review_app" / "templates")
 
-EVENT_LABELS = {"status_report": "Report", "time_report": "Reported time",
+EVENT_LABELS = {"status_report": "Report", "time_report": "Reported time", "radio_report": "Reported instruction",
                 "acknowledgment": "Acknowledgment", "correction": "Correction"}
 STATUS_LABELS = {"in_service": "In service", "out_of_service": "Out of service", "unknown": "Unspecified"}
 STATE_LABELS = {"proposed": "Proposed", "accepted": "Accepted", "rejected": "Rejected"}

@@ -3,7 +3,7 @@ import unittest
 from dataclasses import asdict
 from pathlib import Path
 
-from review_app.extraction import Extractor, describe_review
+from review_app.extraction import Extractor, describe_review, radio_readback
 from review_app.importer import parse_chat, parse_vtt
 
 INPUT = Path(__file__).resolve().parents[1] / "fixtures" / "drill-01" / "input"
@@ -49,3 +49,29 @@ class ExtractionTests(unittest.TestCase):
         extractor = Extractor({"subjects": [{"subject_id": "first", "label": "Cage 1", "aliases": ["Cage"]},
                                             {"subject_id": "second", "label": "Cage 2", "aliases": ["Cage"]}]})
         self.assertIsNone(extractor.extract("Cage is out of service.").subject_id)
+
+
+    def test_inline_radio_correction_and_unannounced_readback_link_only_the_matching_call(self):
+        call = {"source_file_id": 1, "ordinal": 2, "speaker": "Dispatch",
+                "audio_start_ms": 1000, "audio_end_ms": 4000, "capture_offset_ms": 1000}
+        response = {**call, "ordinal": 3, "speaker": "Driver", "audio_start_ms": 4010, "capture_offset_ms": 4010}
+        body = "Maintain one seven zero knots to ALPHA. Correction, one hundred seventy knots until BRAVO."
+        original, correction = self.extractor.extract_radio(body)
+        acknowledgment = radio_readback("One seventy to BRAVO.", response, call, correction)
+        events = [
+            {**vars(item), **record, "id": index, "body": text, "state": "proposed", "target_id": None, "clause": clause}
+            for index, (item, record, text, clause) in enumerate([
+                (original, call, body, -1), (correction, call, body, 0),
+                (acknowledgment, response, "One seventy to BRAVO.", 0),
+            ], 1)
+        ]
+        describe_review(events)
+        self.assertEqual([event["candidates"] for event in events], [[], [1], [2]])
+        self.assertEqual(original.radio_speed_limit.until, "ALPHA")
+        self.assertEqual(correction.radio_speed_limit.until, "BRAVO")
+        self.assertIsNone(radio_readback("One seventy to ALPHA.", response, call, correction))
+        self.assertIsNone(radio_readback("One seventy to BRAVO.", {**response, "source_file_id": 2}, call, correction))
+        self.assertIsNone(radio_readback("One seventy to BRAVO.", {**response, "speaker": "Dispatch"}, call, correction))
+        self.assertIsNone(radio_readback("One seventy to BRAVO.", {**response, "ordinal": 4}, call, correction))
+        self.assertIsNone(self.extractor.extract_radio("Maintain 170 until BRAVO. Correction, 170 until BRAVO."))
+        self.assertIsNone(self.extractor.extract_radio("Maintain one one twenty to ALPHA. Correction 170 until BRAVO."))

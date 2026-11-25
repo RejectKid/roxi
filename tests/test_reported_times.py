@@ -54,5 +54,19 @@ class ReportedTimeTests(unittest.TestCase):
         self.assertGreater(bounds[1], 0.7)
 
 
+    def test_same_call_repair_stays_together_as_two_addressed_calls_split(self):
+        cues = group_fragments([
+            (0, 2, "Radio check complete."),
+            (2, 3.4, "Survey 24, maintain 170 until ALPHA."),
+            (3.5, 4.1, "Correction, 170 until BRAVO."),
+            (4.1, 5.8, "170 to BRAVO."),
+        ])
+        self.assertEqual(cues, [
+            (0, 2, "Radio check complete."),
+            (2, 4.1, "Survey 24, maintain 170 until ALPHA. Correction, 170 until BRAVO."),
+            (4.1, 5.8, "170 to BRAVO."),
+        ])
+
+
 if __name__ == "__main__":
     unittest.main()

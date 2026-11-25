@@ -3,11 +3,15 @@ import re
 import numpy as np
 from faster_whisper import decode_audio
 
+from .radio_messages import inline_speed_correction, speed_readback
+
 SAMPLE_RATE = 16_000
 FRAME_SECONDS = 0.02
 TURN_PAUSE = 0.9
 SHORT_TURN_SECONDS = 2
-RECEIPT_START = re.compile(r"^\s*(?:copy|roger|acknowledged)\b", re.I)
+RECEIPT_START = re.compile(r"^(?:copy|roger|acknowledged|affirmative|yes sir|yes ma'am)\b", re.I)
+CALLSIGN_START = re.compile(r"^(?:[a-z]{2,} ){1,2}(?:[a-z]{0,3}\d{2,5}[a-z]{0,2})\b", re.I)
+REPAIR_START = re.compile(r"^(?:correction|make that|i meant)\b", re.I)
 
 
 def group_fragments(fragments) -> list[tuple[float, float, str]]:
@@ -16,9 +20,21 @@ def group_fragments(fragments) -> list[tuple[float, float, str]]:
         text = " ".join(text.split())
         if not text:
             continue
-        if turns and 0 <= start - turns[-1][1] < TURN_PAUSE and not RECEIPT_START.search(text):
+        if turns:
             previous_start, previous_end, previous_text = turns[-1]
-            if end - previous_start <= 30:
+            gap = start - previous_end
+            # A complete sentence followed by an address or a numeric readback can mark
+            # a new transmission even when the decoder puts almost no silence between them.
+            repeated = speed_readback(text)
+            previous_repair = inline_speed_correction(previous_text) if repeated and gap < 0.20 else None
+            numeric_reply = repeated is not None and (gap >= 0.20 or (previous_repair and repeated == previous_repair[1]))
+            boundary = RECEIPT_START.match(text) or (
+                previous_text.endswith((".", "?", "!")) and (CALLSIGN_START.match(text) or numeric_reply)
+            )
+            continuation = REPAIR_START.match(text) and (
+                gap < 0.35 or inline_speed_correction(f"{previous_text} {text}") is not None
+            )
+            if 0 <= gap < TURN_PAUSE and end - previous_start <= 30 and (continuation or not boundary):
                 turns[-1] = previous_start, max(previous_end, end), f"{previous_text} {text}"
                 continue
         turns.append((start, end, text))
@@ -99,6 +115,11 @@ def radio_cues(model, source, language: str) -> tuple[float, list[tuple[float, f
         if is_short and bounds is None:
             continue
         first, last = bounds or (start, end)
+        if speed_readback(text):
+            # Leave room for a quiet leading digit when the word alignment starts late.
+            first = min(first, start - 0.45)
+            if cues:
+                earlier = max(earlier, cues[-1][1])
         first, last = max(first, earlier), min(last, later)
         if last <= first:
             first, last = start, end

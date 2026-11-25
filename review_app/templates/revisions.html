@@ -23,7 +23,9 @@
         <h3>{{ event_labels[event.kind] }}{% if event.subject_id %} · {{ subjects.get(event.subject_id, event.subject_id) }}{% endif %}</h3>
         <p>{{ event.body }}</p>
         {% if event.reported_status %}<p class="review-hint">Reported status · {{ status_labels[event.reported_status] }}</p>{% endif %}
-        {% if event.reported_time_seconds is defined and event.reported_time_seconds is not none %}
+        {% if event.radio_speed_limit %}
+        <p class="review-hint">{{ event.radio_speed_limit.knots }} knots until {{ event.radio_speed_limit.until }}</p>
+        {% elif event.reported_time_seconds is defined and event.reported_time_seconds is not none %}
         <p class="review-hint">Elapsed time · {{ event.reported_time_seconds | reported_time }}</p>
         {% endif %}
         {% if event.target_id and event.target_id in by_id %}
@@ -38,7 +40,8 @@
         </p>
         {% endif %}
         {{ evidence_link(exercise.id, event, selected.number) }}
-        {% if event.target_id and event.target_id in by_id %}
+        {% if event.target_id and event.target_id in by_id
+              and (event.source_file_id, event.ordinal) != (by_id[event.target_id].source_file_id, by_id[event.target_id].ordinal) %}
         <span class="evidence-separator">·</span> {{ evidence_link(exercise.id, by_id[event.target_id], selected.number) }}
         {% endif %}
       </div>
