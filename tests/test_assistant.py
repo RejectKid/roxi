@@ -5,7 +5,8 @@ from unittest.mock import patch
 from review_app.chat_types import Claim
 from review_app.chatbot import plan_question, read_clock
 from review_app.query_models import ChatLines, EvidenceResult, ReportEvent, ReportPayload
-from review_app.transcription import split_at_silence, timestamp
+from review_app.radio_vocabulary import FixVocabulary, suggest_fix_spellings
+from review_app.transcription import apply_fix_vocabulary, split_at_silence, timestamp
 from review_app.verifier import evaluate_claim
 
 GLOSSARY = {"subjects": [{"subject_id": "bay-2", "label": "Bay 2", "aliases": ["Bay two"]}]}
@@ -29,6 +30,23 @@ class AssistantTests(unittest.TestCase):
         ])
         self.assertEqual(list(split_at_silence(segment)), [(1.0, 1.5, " Bay two."), (3.0, 3.6, " Copy.")])
         self.assertEqual(timestamp(642123), "00:10:42.123")
+
+    def test_fix_hints_keep_webvtt_timestamps_and_record_the_original_spelling(self):
+        vocabulary = FixVocabulary(source="Synthetic chart", terms=["DABEK", "KELIN", "BITEN"])
+        before = ("WEBVTT\n\nS001\n00:00:03.100 --> 00:00:05.900\n"
+                  "Maintain 170 to Dabik &amp; then cross Kelen.\n")
+        after, edits = apply_fix_vocabulary(before, vocabulary)
+        self.assertEqual(after.splitlines()[:4], before.splitlines()[:4])
+        self.assertIn("to DABEK &amp; then cross KELIN", after)
+        self.assertEqual(edits, [
+            {"cue_id": "S001", "original": "Dabik", "suggested": "DABEK"},
+            {"cue_id": "S001", "original": "Kelen", "suggested": "KELIN"},
+        ])
+
+    def test_fix_hints_leave_ambiguous_or_out_of_context_words_alone(self):
+        vocabulary = FixVocabulary(source="Synthetic chart", terms=["DABEK", "DABIK", "KELIN", "FLIGH"])
+        before = "Dabuk is here. Proceed direct Dabuk. A Kelen update. Direct flight. Proceed direct DABIK."
+        self.assertEqual(suggest_fix_spellings(before, vocabulary), (before, []))
 
     def test_verifier_rejects_wrong_status_and_out_of_cutoff_evidence(self):
         evidence = EvidenceResult(

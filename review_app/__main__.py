@@ -32,6 +32,8 @@ def main() -> None:
     worker.add_argument("--offline", action="store_true", help="Use only cached model weights.")
     worker.add_argument("--profile", choices=PROFILES, default="standard",
                         help="Use the radio profile for recorded push-to-talk audio.")
+    worker.add_argument("--radio-fixes", type=Path,
+                        help="Suggest chart fix spellings from a JSON vocabulary for the selected radio sources.")
     sandbox = commands.add_parser("register-live", help="Register one sandbox chat room for an imported exercise.")
     sandbox.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
     sandbox.add_argument("room", type=TypeAdapter(Slug).validate_python)
@@ -105,7 +107,8 @@ def main() -> None:
             from .transcription import build_bundle
 
             report = build_bundle(args.manifest, args.output, model_name=args.model, language=args.language,
-                                  exercise_id=args.exercise_id, offline=args.offline, profile=args.profile)
+                                  exercise_id=args.exercise_id, offline=args.offline, profile=args.profile,
+                                  radio_fixes=args.radio_fixes)
             print(json.dumps(report, indent=2))
     except (LiveError, source_catalog.CatalogError, HistoryError) as exc:
         parser.exit(1, f"{args.command} failed: {exc.detail}\n")

@@ -69,3 +69,51 @@ Open the reviewed exercise, extract proposals, and accept the reports and acknow
 ```
 
 For a publication made from the reference transcript, omit `--reviewed-asr` to require the exact annotated cue boundaries and text.
+
+
+## Optional chart spelling suggestions
+
+For archived radio with a known chart or vocabulary, add `--radio-fixes fix-vocabulary.json` to the `transcribe` command with `--profile radio`. The file maps each audio source key to a source reference and a list of five-letter fix codes.
+
+```json
+{
+  "example-radio": {
+    "source": "Example chart, revision 2",
+    "terms": ["DABEK", "KELIN", "BITEN"]
+  }
+}
+```
+
+Roxi suggests a single-letter spelling change in a recognized fix-name position when exactly one chart entry matches. It copies the original audio, keeps the cue boundaries, and writes the unmodified model output as `sources/<source-key>.unhinted.vtt`. The import manifest points to the suggested transcript. Check `transcription.json` for the vocabulary reference, cue IDs, and before-and-after spellings, and use the original audio during review. Leave the option off when the vocabulary is unavailable or multiple candidates are plausible.
+
+### Archived radio comparison
+
+The Boston development clip recovered **7 of 7** published fix-name mentions with suggestions enabled, up from zero. Strict word error rate improved from **63.7% to 58.9%**. The reviewed correction and readback still produced two distinct citations that played the expected clips in Chrome. Passing the same chart terms directly to the recognizer produced extra names and merged transmissions. The optional spelling pass uses the original decoder output and timing. [Boston recording](https://catalog.ldc.upenn.edu/LDC94S14A) · [FAA chart vocabulary](https://aeronav.faa.gov/d-tpp/2611/00058IL27.PDF)
+
+Two ATCO2 evaluation excerpts were frozen before tuning. Prague already recognized both mentions of LANUX and kept both playable clip ranges. Bratislava missed all three TOVKA mentions and merged the revised clearance and pilot readback, so its playable fallback opened a wider clip. The spelling pass made zero changes on either holdout and introduced zero excess chart terms in the three excerpts. Apollo 11 remained at **38.9%** word error rate and **2 of 2** correct answer citations with the option off. [ATCO2 one-hour evaluation subset](https://www.atco2.org/data) · [Apollo 11 evaluation](APOLLO-11-EVALUATION.md)
+
+## Run the timed civilian pilot
+
+Allow 25–35 minutes for one consenting logistics or facilities reviewer. Use two short, authorized recordings or replay windows with similar audio quality, duration, and message volume. Prepare four questions per window using the same task types. The fictional West Annex exercise can be used to practice the procedure before a measured session.
+
+| Task | What the facilitator checks |
+| --- | --- |
+| Correction | The participant identifies the original and corrected statement and opens the evidence for each. |
+| Acknowledgment | The participant identifies who acknowledged which report and can open the message or clip. |
+| Ambiguity | The participant identifies a conflict or missing confirmation and cites the evidence that supports that uncertainty. |
+| Evidence retrieval | The participant locates the requested message or transmission and opens the correct original line or clip. |
+
+Prepare the expected facts and source locators before the session. Keep the answer key with the facilitator. If replay is part of the test, stage both windows with comparable cadence and freeze the Roxi revision evaluated for each. Use the participant's usual tools for one window and Roxi for the other, with equivalent access to the original material. For multiple participants, alternate which workflow goes first and which window it gets.
+
+1. Confirm the reviewer agrees to participate and that you can use the selected material. Record a participant ID, the two session windows, test order, and the tools used.
+2. Start each timer when the reviewer sees the question. Stop when they submit an answer and open the evidence, or when three minutes elapse. Record misses and timeouts with the elapsed time. Apply the same limit in both conditions.
+3. Track the Roxi preparation time separately. Time the reviewer from the first proposed event they inspect through publication. Count corrections missed, incorrect links proposed and accepted, and edits made before publication.
+4. Compare the number of supported answers, elapsed time for supported answers, citation accuracy, and review effort. Report the individual counts and failure cases for a single reviewer. Keep the pilot result alongside the archived benchmarks.
+
+| Participant | Window | Workflow | Question | Seconds | Supported | Expected citations opened | Missed correction or false link | Notes |
+| --- | --- | --- | --- | ---: | --- | --- | --- | --- |
+|  |  | Usual tools or Roxi |  |  |  |  |  |  |
+
+| Window and revision | Review seconds | Events inspected | Edits made | Missed corrections | False links proposed | False links accepted |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+|  |  |  |  |  |  |  |

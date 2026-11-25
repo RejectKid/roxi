@@ -1,17 +1,21 @@
 import json
 import os
 import shutil
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import perf_counter
 
-from .importer import AudioSource, Manifest, file_in
+from pydantic import TypeAdapter
+
+from .importer import AudioSource, Manifest, Slug, file_in
+from .radio_vocabulary import FixVocabulary, suggest_fix_spellings
 from .storage import ROOT
 
 DEFAULT_MODEL = "small.en"
 CACHE = ROOT / ".local" / "models"
 PROFILES = ("standard", "radio")
+FIX_VOCABULARIES = TypeAdapter(dict[Slug, FixVocabulary])
 
 
 def timestamp(milliseconds: int) -> str:
@@ -71,9 +75,21 @@ def transcribe_recording(model, source: Path, language: str, *, profile: str = "
     }
 
 
+def apply_fix_vocabulary(vtt: str, vocabulary: FixVocabulary) -> tuple[str, list[dict]]:
+    header, *blocks = vtt.strip().split("\n\n")
+    edits = []
+    reviewed = [header]
+    for block in blocks:
+        cue_id, timing, text = block.split("\n", 2)
+        text, changes = suggest_fix_spellings(unescape(text), vocabulary)
+        edits.extend({"cue_id": cue_id, **change} for change in changes)
+        reviewed.append(f"{cue_id}\n{timing}\n{escape(text, quote=False)}")
+    return "\n\n".join(reviewed) + ("\n" if blocks else "\n\n"), edits
+
+
 def build_bundle(manifest_path: Path, output: Path, *, model_name: str = DEFAULT_MODEL,
                  language: str = "en", exercise_id: str | None = None, offline: bool = False,
-                 profile: str = "standard") -> dict:
+                 profile: str = "standard", radio_fixes: Path | None = None) -> dict:
     from faster_whisper import WhisperModel
 
     manifest_path = manifest_path.resolve(strict=True)
@@ -91,6 +107,15 @@ def build_bundle(manifest_path: Path, output: Path, *, model_name: str = DEFAULT
     Manifest.model_validate(generated)
     if not any(isinstance(source, AudioSource) for source in manifest.sources):
         raise ValueError("The manifest has no recordings to transcribe.")
+
+    vocabularies = {}
+    if radio_fixes is not None:
+        if profile != "radio":
+            raise ValueError("A radio fix vocabulary requires the radio profile.")
+        vocabularies = FIX_VOCABULARIES.validate_json(radio_fixes.read_bytes())
+        audio_keys = {source.source_key for source in manifest.sources if isinstance(source, AudioSource)}
+        if not vocabularies or not vocabularies.keys() <= audio_keys:
+            raise ValueError("A radio fix vocabulary must identify at least one known audio source key.")
 
     threads = min(8, os.cpu_count() or 1)
     model = WhisperModel(model_name, device="cpu", compute_type="int8", cpu_threads=threads,
@@ -115,6 +140,15 @@ def build_bundle(manifest_path: Path, output: Path, *, model_name: str = DEFAULT
             if isinstance(source, AudioSource):
                 transcript = f"sources/{source.source_key}.vtt"
                 vtt, details = transcribe_recording(model, sources / filename, language, profile=profile)
+                vocabulary = vocabularies.get(source.source_key)
+                if vocabulary is not None:
+                    unhinted = f"sources/{source.source_key}.unhinted.vtt"
+                    (bundle / unhinted).write_text(vtt, encoding="utf-8")
+                    vtt, edits = apply_fix_vocabulary(vtt, vocabulary)
+                    details["spelling_suggestions"] = {
+                        "source": vocabulary.source, "terms": vocabulary.terms,
+                        "unhinted_transcript": unhinted, "edits": edits,
+                    }
                 (bundle / transcript).write_text(vtt, encoding="utf-8")
                 metadata["transcript_file"] = transcript
                 report["tracks"][source.source_key] = details
