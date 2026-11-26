@@ -64,6 +64,8 @@ jobs:
         run: python tools/check_history_view.py
       - name: Verify history assistant, HTTP and MCP parity, and subscription resume
         run: python tools/check_history_interfaces.py
+      - name: Verify multi-channel capture, replay, and original audio
+        run: python tools/check_live_context.py
       - name: Verify pilot access, retention, and backup restore
         run: |
           docker compose exec -T db createdb -U review_owner roxi_pilot_ci

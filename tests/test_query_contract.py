@@ -46,8 +46,8 @@ class PublishedQueryTests(unittest.TestCase):
 
     def test_http_schema_and_mcp_share_the_same_result_types(self):
         operations = {
-            endpoint["get"]["operationId"]: endpoint["get"] for name, endpoint in app.openapi()["paths"].items()
-            if name.startswith("/v1/") and not name.endswith("/original")
+            endpoint["get"]["operationId"]: endpoint["get"] for endpoint in app.openapi()["paths"].values()
+            if "get" in endpoint and endpoint["get"]["operationId"] in TOOLS
         }
         self.assertEqual(set(operations), set(TOOLS))
         for name, operation in operations.items():

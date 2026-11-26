@@ -30,13 +30,21 @@ class Locator:
 
 
 @dataclass(frozen=True)
+class ChannelAudioLocator:
+    value: str
+    start_ms: int
+    end_ms: int
+    kind: Literal["audio_interval"] = "audio_interval"
+
+
+@dataclass(frozen=True)
 class Record:
     record_id: str
-    subject_id: str
+    subject_id: str | None
     kind: str
     observed_at: datetime
     data: dict
-    locator: Locator
+    locator: Locator | ChannelAudioLocator
 
 
 @dataclass(frozen=True)
@@ -257,11 +265,22 @@ def weather(payload: bytes, version: int) -> Parsed:
     return json_records(document["features"], "/features", normalize)
 
 
+CHANNEL_CHAT = "channel-chat"
+CHANNEL_RADIO = "completed-radio"
+CHANNEL_ADAPTERS = {CHANNEL_CHAT, CHANNEL_RADIO}
+
+
+def channel_payload(_payload: bytes, _version: int) -> Parsed:
+    raise ValueError("Use the versioned channel capture endpoint for chat and completed radio.")
+
+
 ADAPTERS = {
     item.key: item for item in (
         Adapter("assets-csv", "roxi.assets-csv/v1", (1,), lambda data, _: csv_rows(data, AssetRow, "asset_id", "asset")),
         Adapter("sites-csv", "roxi.sites-csv/v1", (1,), lambda data, _: csv_rows(data, SiteRow, "site_id", "site")),
         Adapter("civilian-fleet", "roxi.civilian-fleet/v1", (1, 2), fleet),
         Adapter("nws-observations", "nws.observation-geojson/v1", (1, 2), weather),
+        Adapter(CHANNEL_CHAT, "roxi.channel-chat/v1", (1,), channel_payload),
+        Adapter(CHANNEL_RADIO, "roxi.completed-radio/v1", (1,), channel_payload),
     )
 }

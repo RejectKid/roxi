@@ -1,0 +1,12 @@
+{
+  "correction": {
+    "original": {"source":"facilities-radio","clip_id":"clip-1","cue":"F1","subject":"Bay 3"},
+    "replacement": {"source":"dispatch","message_id":"message-1","version":1,"subject":"Bay 2"}
+  },
+  "acknowledgment": {"source":"receiving","message_id":"message-2","sender":"receiving","subject":"Bay 2"},
+  "conflict": {"subject":"Returns Cage 1","sources":["yard-radio","receiving"],"statuses":["in_service","out_of_service"]},
+  "ambiguous_alias": {"subject":"Yard Runner","candidate_ids":["west-annex-van","yard-cart"]},
+  "pending_audio": 2,
+  "radio_interval_ms": [0,1800],
+  "outage_source": "Sandbox fleet"
+}

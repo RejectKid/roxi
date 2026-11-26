@@ -6,11 +6,12 @@ from pathlib import Path
 import psycopg
 from pydantic import AwareDatetime, TypeAdapter
 
+from .channel_export import export_channels
 from .history_registry import HistoryError, Version, load_layer, load_registry
 from .importer import Slug, import_exercise
 from .live_chat import LiveError, register_room, work
 from .live_export import export_snapshot
-from . import source_catalog
+from . import channel_capture, source_catalog
 from . import pilot_admin
 from .source_adapters import Label
 from .storage import migrate
@@ -39,10 +40,19 @@ def main() -> None:
     sandbox.add_argument("room", type=TypeAdapter(Slug).validate_python)
     classifier = commands.add_parser("classify-live", help="Classify sandbox messages stored in PostgreSQL.")
     classifier.add_argument("--once", action="store_true", help="Process at most one batch, then exit.")
+    radio = commands.add_parser("transcribe-live", help="Transcribe completed radio captures with a local worker.")
+    radio.add_argument("--model", default="small.en")
+    radio.add_argument("--once", action="store_true", help="Process at most one queued clip and exit.")
+    radio.add_argument("--offline", action="store_true", help="Use only cached model weights.")
     snapshot = commands.add_parser("export-live", help="Freeze live chat for review and publication as a separate exercise.")
     snapshot.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
     snapshot.add_argument("review_exercise", type=TypeAdapter(Slug).validate_python)
     snapshot.add_argument("output", type=Path)
+    channels = commands.add_parser("export-channels", help="Freeze multi-channel originals for review and publication.")
+    channels.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
+    channels.add_argument("review_exercise", type=TypeAdapter(Slug).validate_python)
+    channels.add_argument("output", type=Path)
+    channels.add_argument("--known-at", required=True, type=TypeAdapter(AwareDatetime).validate_python)
     catalog = commands.add_parser("sources", help="Register, ingest, and replay catalog sources.")
     source_commands = catalog.add_subparsers(dest="source_command", required=True)
     registration = source_commands.add_parser("register", help="Register sources from a JSON catalog.")
@@ -91,9 +101,15 @@ def main() -> None:
                 print(json.dumps({"classified": work(once=True)}))
             else:
                 work()
+        elif args.command == "transcribe-live":
+            print(json.dumps({"processed": channel_capture.work_radio(
+                args.model, once=args.once, offline=args.offline
+            )}))
         elif args.command == "export-live":
             count = export_snapshot(args.exercise, args.review_exercise, args.output)
             print(f"Exported {count} messages to {args.output}.")
+        elif args.command == "export-channels":
+            print(json.dumps(export_channels(args.exercise, args.review_exercise, args.output, known_at=args.known_at)))
         elif args.command == "sources":
             run_source_command(args)
         elif args.command == "history":

@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapte
 
 from .importer import Slug
 from .live_chat import connect_editor
-from .source_adapters import ADAPTERS, CONTRACT_VERSION, MAX_PAYLOAD_BYTES, Label
+from .source_adapters import ADAPTERS, CHANNEL_ADAPTERS, CONTRACT_VERSION, MAX_PAYLOAD_BYTES, Label
 from .storage import archive_capture, archive_path, archive_writer, connect_read
 
 ITEM_LIMIT = 50
@@ -105,7 +105,10 @@ def derive(conn, capture_id, adapter, version, payload) -> dict:
     ).fetchone()
     if row:
         return {**row, "reused_derivation": True}
-    parsed = adapter.parse(payload, version)
+    return save_derivation(conn, capture_id, adapter, version, adapter.parse(payload, version))
+
+
+def save_derivation(conn, capture_id, adapter, version, parsed) -> dict:
     records = []
     for item in parsed.records:
         row = asdict(item)
@@ -129,6 +132,8 @@ def ingest(exercise_id: str, source_key: str, name: str, data: bytes, version: i
     with connect_editor() as conn:
         source = registered(conn, exercise_id, source_key, lock=True)
         adapter = ADAPTERS[source["adapter_key"]]
+        if source["adapter_key"] in CHANNEL_ADAPTERS:
+            raise CatalogError(422, "Send chat or radio through the versioned channel capture endpoint.")
         selected = adapter.select_version(version)
         original = archive_capture(data)
         key = (exercise_id, source_key, original.sha256)
@@ -298,6 +303,17 @@ def recent_captures(conn, exercise_id, source_key):
     return [{**row, "url": capture_url(exercise_id, source_key, row["id"])} for row in rows]
 
 
+def pending_audio(conn, exercise_id, source_key) -> int:
+    return conn.execute(
+        """
+        SELECT count(*) AS pending FROM channel_capture AS c
+        WHERE c.exercise_id = %s AND c.source_key = %s AND c.audio_digest IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM catalog_derivation AS d WHERE d.capture_id = c.capture_id)
+        """,
+        (exercise_id, source_key),
+    ).fetchone()["pending"]
+
+
 def describe(conn, config, now):
     exercise, source = config["exercise_id"], config["source_key"]
     attempt = attempt_history(conn, exercise, source)
@@ -311,6 +327,9 @@ def describe(conn, config, now):
         gaps.append("Missing expected IDs: " + ", ".join(sorted(missing)))
     if not usable:
         gaps.append("No usable capture.")
+    pending = pending_audio(conn, exercise, source) if config["adapter_key"] in CHANNEL_ADAPTERS else 0
+    if pending:
+        gaps.append(f"{pending} completed radio clip(s) awaiting transcription.")
     if attempt and attempt["failure"]:
         gaps.append(attempt["failure"])
     if attempt and attempt["state"] == "quarantined":

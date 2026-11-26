@@ -6,12 +6,12 @@ from .storage import OWNER_DSN, archive_lock, archive_path, connect_owner
 ARCHIVE_REFS = (
     ("pilot_import_archive", "exercise_id", "digest"),
     ("source_file", "exercise_id", "content_sha256"), ("source_file", "exercise_id", "transcript_sha256"),
-    ("catalog_capture", "exercise_id", "digest"),
+    ("catalog_capture", "exercise_id", "digest"), ("channel_capture", "exercise_id", "audio_digest"),
     ("history_registry", "exercise_id", "digest"), ("history_layer", "exercise_id", "digest"),
 )
 DIRECT_CHILDREN = (
     "history_change", "history_change_clock", "history_layer", "history_registry",
-    "catalog_attempt", "review_revision", "review_transcript", "review_event", "review_draft",
+    "catalog_attempt", "channel_capture", "review_revision", "review_transcript", "review_event", "review_draft",
     "live_chat_version", "live_room", "exercise_source",
 )
 
