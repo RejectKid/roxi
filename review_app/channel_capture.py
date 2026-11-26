@@ -22,7 +22,7 @@ from .query_models import Input
 from .source_adapters import (
     ADAPTERS, CHANNEL_CHAT, CHANNEL_RADIO, ChannelAudioLocator, Issue, Locator, Parsed, Record,
 )
-from .storage import archive_capture, archive_path, archive_writer, connect_read
+from .storage import ARCHIVE_LOCK, archive_capture, archive_path, archive_writer, connect_read
 
 WAV_LIMIT = 1_400_000
 ENCODED_LIMIT = (WAV_LIMIT + 2) // 3 * 4
@@ -181,8 +181,9 @@ def receive(exercise_id: str, source_key: str, item: ChannelMessage | CompletedC
         return ChannelReceipt(capture_id, saved["state"])
 
 
-def radio_batch(conn, transcribe) -> bool:
+def radio_batch(conn, transcribe, *, model_name: str | None = None) -> bool:
     with conn.transaction():
+        conn.execute("SELECT pg_advisory_xact_lock_shared(%s)", (ARCHIVE_LOCK,))
         job = conn.execute(
             """
             SELECT item.*, exercise.glossary
@@ -223,7 +224,8 @@ def radio_batch(conn, transcribe) -> bool:
                               job["observed_at"] + timedelta(milliseconds=cue.audio_start_ms),
                               job["sender"], cue.body,
                               ChannelAudioLocator(cue.cue_id or str(cue.ordinal), cue.audio_start_ms, cue.audio_end_ms),
-                              clip_id=job["item_key"], clip_started_at=job["observed_at"].isoformat())
+                              clip_id=job["item_key"], clip_started_at=job["observed_at"].isoformat(),
+                              transcription_model=model_name)
                 for cue in cues
             ]
             issues = [] if records else [Issue("no_transcript", "The clip produced no transcript.",
@@ -249,7 +251,7 @@ def work_radio(model_name: str, *, once: bool = False, offline: bool = False) ->
 
     with connect_editor(autocommit=True) as conn:
         while True:
-            processed = radio_batch(conn, transcribe)
+            processed = radio_batch(conn, transcribe, model_name=model_name)
             if once:
                 return int(processed)
             if not processed:

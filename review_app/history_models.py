@@ -97,6 +97,7 @@ class HistoryRecord(Input):
     text: str | None = None
     medium: Literal["chat", "radio"] | None = None
     sender: str | None = None
+    transcription_model: str | None = None
     input_version: int | None = None
     reported_status: ReportedStatus | None = None
     reported_time_seconds: int | None = None

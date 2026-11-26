@@ -314,6 +314,7 @@ def history_record(row: dict) -> model.HistoryRecord:
         state="proposed" if medium else "observation", observed_at=row["observed_at"],
         received_at=row["received_at"], available_at=row["available_at"], late=row["late"], text=data.get("text"),
         medium=medium, sender=data.get("sender"), input_version=data.get("version"),
+        transcription_model=data.get("transcription_model"),
         reported_status=row["reported_status"] if medium else None,
         reported_time_seconds=data.get("reported_time_seconds"), telemetry_status=data.get("status"),
         position=row["position"], external_id=row["external_id"], entity_id=entity["id"] if entity else None,

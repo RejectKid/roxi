@@ -6,7 +6,9 @@
   "acknowledgment": {"source":"receiving","message_id":"message-2","sender":"receiving","subject":"Bay 2"},
   "conflict": {"subject":"Returns Cage 1","sources":["yard-radio","receiving"],"statuses":["in_service","out_of_service"]},
   "ambiguous_alias": {"subject":"Yard Runner","candidate_ids":["west-annex-van","yard-cart"]},
+  "vehicle_identity": {"entity_id":"west-annex-van","sources":["assets","fleet","receiving","yard-radio"]},
   "pending_audio": 2,
   "radio_interval_ms": [0,1800],
+  "second_radio_interval_ms": [2200,4000],
   "outage_source": "Sandbox fleet"
 }

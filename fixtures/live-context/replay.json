@@ -7,10 +7,11 @@
   ],
   "events": [
     {"source":"facilities-radio","key":"clip-1","at":"15:02:04","sender":"facilities","text":"Dispatch, Bay 3 is out of service pending inspection."},
-    {"source":"yard-radio","key":"clip-1","at":"15:02:20","sender":"yard","text":"Returns Cage 1 is open for returns."},
+    {"source":"yard-radio","key":"clip-1","at":"15:02:20","sender":"yard","text":"Returns Cage 1 is open for returns.","second_cue":"North Shuttle is in service."},
     {"source":"dispatch","key":"message-1","at":"15:02:29","sender":"maintenance","text":"Correction, Bay 2 is out of service."},
     {"source":"receiving","key":"message-1","at":"15:02:20","sender":"receiving","text":"Returns Cage 1 is closed for returns."},
     {"source":"receiving","key":"message-2","at":"15:02:41","sender":"receiving","text":"Copy, Bay 2 is out of service."},
-    {"source":"receiving","key":"message-3","at":"15:02:46","sender":"receiving","text":"Yard Runner is back in service."}
+    {"source":"receiving","key":"message-3","at":"15:02:46","sender":"receiving","text":"Yard Runner is back in service."},
+    {"source":"receiving","key":"message-5","at":"15:03:00","sender":"receiving","text":"North Shuttle is in service."}
   ]
 }

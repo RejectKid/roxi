@@ -2,13 +2,15 @@
 
 [![Tests](https://github.com/RejectKid/roxi/actions/workflows/ci.yml/badge.svg)](https://github.com/RejectKid/roxi/actions/workflows/ci.yml) [![GitHub release](https://img.shields.io/github/v/release/RejectKid/roxi)](https://github.com/RejectKid/roxi/releases)
 
-Roxi turns recorded radio and chat from completed exercises into a searchable record. Review reports, corrections, and acknowledgments on one timeline, publish a revision, and ask questions whose answers link to the original clip or message.
+Roxi is a local service that turns chat, completed radio calls, and civilian data feeds into queryable records with original evidence. Existing applications can embed its assistant over HTTP, and agents can query the same history through typed HTTP, Python, or read-only MCP. The built-in web app lets reviewers verify reports and publish revisions.
 
 ![Roxi answering a question about a corrected report and citing the original radio clip and chat line](docs/assets/roxi-assistant.png)
 
 - **Review the timeline.** Play audio at the relevant offset and see where a source lacks an exercise-time anchor.
 - **Publish a revision.** Keep reviewed events, transcript edits, and original evidence together so earlier answers are reproducible.
 - **Ask or integrate.** Use the local assistant, or query the same published records over HTTP and read-only MCP.
+
+Start with the [integration guide](docs/INTEGRATING-ROXI.md) to connect a host app, agent, or source connector. Use the [multi-channel replay](docs/LIVE-CONTEXT-PILOT.md#run-the-automated-replay) to verify the backend without generating audio first.
 
 ## Quickstart
 
@@ -35,6 +37,8 @@ The default app and database bind to loopback. PostgreSQL persists in the Compos
 
 | What you want to do | Guide |
 | --- | --- |
+| Embed cited answers, connect an agent, or submit chat/radio captures | [Integrate Roxi](docs/INTEGRATING-ROXI.md) |
+| Replay multiple sources and prepare a timed civilian pilot | [Live context replay and pilot](docs/LIVE-CONTEXT-PILOT.md) |
 | Review, publish, and ask about the West Annex drill | [Demo walkthrough](docs/DEMO.md) |
 | Replay warehouse chat and see classifications as messages arrive | [Live sandbox walkthrough](docs/LIVE-DEMO.md) |
 | Load CSV, fleet, and weather sources and inspect freshness | [Source catalog and replay](docs/SOURCE-CATALOG.md) |

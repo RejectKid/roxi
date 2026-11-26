@@ -1,12 +1,16 @@
 """Exercise pilot permissions, retention, and real PostgreSQL backup/restore in two disposable databases."""
 
 import asyncio
+import base64
+import hashlib
+import io
 import json
 import os
 import secrets
 import shutil
 import subprocess
 import sys
+import wave
 from datetime import UTC, datetime, timedelta
 from http.cookiejar import CookieJar
 from pathlib import Path
@@ -74,6 +78,29 @@ def post_message(base, token, message_id, *, status=202):
                "text": "North Shuttle is out of service."}
     return result(base, f"/exercises/{EXERCISE}/live/{ROOM}/messages", token=token, expected=status,
                   headers={"Content-Type": "application/json"}, data=json.dumps(payload).encode())
+
+
+def capture_backup_radio(folder, base, token):
+    from review_app.source_catalog import register
+
+    config = folder / "radio-catalog.json"
+    config.write_text(json.dumps([{"source_key": "backup-radio", "label": "Backup radio fixture",
+                                   "adapter_key": "completed-radio", "stale_after_seconds": 120}]), encoding="utf-8")
+    assert register(EXERCISE, config) == 1
+    audio = io.BytesIO()
+    with wave.open(audio, "wb") as wav:
+        wav.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
+        wav.writeframes(bytes(16000))
+    raw = audio.getvalue()
+    payload = {"schema": "roxi.completed-radio/v1", "clip_id": "backup-clip", "sender": "dock",
+               "observed_at": "2026-11-22T15:03:00Z", "wav_base64": base64.b64encode(raw).decode("ascii")}
+    prefix = f"/v1/exercises/{EXERCISE}/channels/backup-radio/captures"
+    response = result(base, prefix, token=token, data=json.dumps(payload).encode(),
+                      headers={"Content-Type": "application/json"}, expected=202)
+    assert response["state"] == "pending"
+    url = f"{prefix}/{response['capture_id']}/audio"
+    assert http(base, url, token=token) == raw
+    return {"url": url, "digest": hashlib.sha256(raw).hexdigest()}
 
 
 async def verify_access(base, pin, reader, reviewer, browser):
@@ -157,6 +184,9 @@ def restore_check(receipt):
         response = result(base, "/v1/history/evidence", token=admin, params=receipt["evidence"])
         assert response["sha256"] == receipt["digest"]
         assert http(base, response["original_url"], token=admin)
+        audio = receipt["queued_radio"]
+        assert hashlib.sha256(http(base, audio["url"], token=admin)).hexdigest() == audio["digest"]
+        assert result(base, audio["url"].removesuffix("/audio"), token=admin)["state"] == "pending"
         feed = result(base, "/v1/history/changes", token=admin,
                       params={"exercise_id": EXERCISE, "after": receipt["resume"]})
         assert not feed["changes"]
@@ -248,6 +278,7 @@ def check(folder: Path, target: str) -> dict:
         first = next(c for c in fact["citations"] if c["source"] == "catalog:fleet")
         backup_pin = {**pin, "key": first["key"]}
         checkpoint = result(base, f"/exercises/{EXERCISE}/operations.json", token=operator)["chat"]["change_seq"]
+        queued_radio = capture_backup_radio(folder, base, operator)
 
     bundle = folder / "backup"
     saved = pilot_backup.backup(bundle, compose=True)
@@ -265,6 +296,7 @@ def check(folder: Path, target: str) -> dict:
     restored = pilot_backup.restore(bundle, target, restored_archive, compose=True)
     assert saved["originals"] == restored["originals"] > 0
     params = {"evidence": backup_pin, "digest": first["sha256"], "chat_checkpoint": checkpoint,
+              "queued_radio": queued_radio,
               "history_checkpoint": feed["changes"][-1]["sequence"], "resume": feed["resume_token"]}
     record = folder / "restore-check.json"
     record.write_text(json.dumps(params), encoding="utf-8")
@@ -288,10 +320,12 @@ def check(folder: Path, target: str) -> dict:
     purged = pilot_retention.purge(WORKSPACE, now=expires, apply=True)
     assert purged["originals_removed"] > 0 and not purged["archive_cleanup_pending"]
     assert not archive_path(first["sha256"]).exists() and archive_path(shared).is_file()
+    assert not archive_path(queued_radio["digest"]).exists()
     with local_server(pilot=True) as base:
         http(base, first["original_url"], token=operator, expected=404)
+        http(base, queued_radio["url"], token=operator, expected=404)
     return {"workspace_isolation": True, "live_scope_revocation": True, "saved_originals_revoked": True,
-            "http_ui_mcp": True, "connector_state": True, "retention": True,
+            "http_ui_mcp": True, "connector_state": True, "retention": True, "restored_queued_radio": True,
             "restored_originals": saved["originals"], "restored_chat_checkpoint": checkpoint,
             "restored_history_checkpoint": params["history_checkpoint"]}
 

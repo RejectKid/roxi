@@ -45,6 +45,7 @@ Use an ingestion account's bearer token for:
 | `POST /exercises/{id}/live/{room}/messages` | The [chat message JSON](LIVE-DEMO.md). |
 | `POST /exercises/{id}/live/{room}/heartbeat` | Empty body. Send a heartbeat at least once a minute for an otherwise quiet connector. |
 | `POST /exercises/{id}/sources/{key}/captures` | The registered [adapter’s](SOURCE-CATALOG.md) CSV or JSON payload and corresponding content type. |
+| `POST /v1/exercises/{id}/channels/{key}/captures` | A [versioned chat message or completed WAV](INTEGRATING-ROXI.md#add-a-connector). |
 
 Keep PostgreSQL and the app bound to loopback. For an authorized network pilot, terminate HTTPS on a reverse proxy, set `ROXI_TRUSTED_HOSTS` to the exact pilot hostname, preserve the Host header, and accept forwarded headers only from that proxy. Configure distinct database credentials for owner, reader, and editor. Use the owner connection for migrations, backup, retention, and account provisioning. The web service uses the reader and editor connections. Run `python -m review_app classify-live` as a supervised worker using the editor connection. The synthetic quickstart uses explicit `ROXI_ACCESS_MODE=demo` and loopback. Exercises attached to workspaces still require pilot access.
 
