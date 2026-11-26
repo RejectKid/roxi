@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
 
+from .channel_capture import audio_url
+from .extraction import link_candidates, link_options
 from .history_registry import exercise_for
 from .source_catalog import capture_url
 from .storage import connect_read
@@ -49,7 +51,8 @@ def catalog_observations(conn, exercise_id, known_at, as_of, allowed):
             SELECT DISTINCT ON (source_key, (record ->> 'record_id'), observed_at) *
             FROM arrivals
             WHERE %(cutoff)s::timestamptz IS NULL OR observed_at <= %(cutoff)s
-            ORDER BY source_key, (record ->> 'record_id'), observed_at, received_at DESC, id DESC
+            ORDER BY source_key, (record ->> 'record_id'), observed_at,
+                     (record #>> '{data,version}')::integer DESC NULLS LAST, received_at DESC, id DESC
         )
         SELECT * FROM records
         ORDER BY observed_at DESC, received_at DESC, id DESC, ordinal LIMIT %(limit)s
@@ -108,26 +111,30 @@ def catalog_item(exercise_id, row):
     record = row["record"]
     data = record["data"]
     url = capture_url(exercise_id, row["source_key"], row["id"])
+    original = (audio_url(exercise_id, row["source_key"], row["id"]) if data.get("medium") == "radio"
+                else url + "/original")
     operating = {"en_route", "in_transit"}
-    status = "in_service" if record["kind"] == "vehicle_observation" and data.get("status") in operating else None
+    status = "in_service" if record["kind"] == "vehicle_observation" and data.get("status") in operating else data.get("reported_status")
     geometry = [data["longitude"], data["latitude"]] if "longitude" in data and "latitude" in data else None
     return {"key": f"capture-{row['id']}-{row['parser_version']}-{row['ordinal']}",
             "source": f"catalog:{row['source_key']}", "source_key": row["source_key"], "kind": record["kind"],
-            "external_id": record["subject_id"], "label": data.get("name", record["subject_id"]),
+            "external_id": record["subject_id"], "record_id": record["record_id"],
+            "label": data.get("text") or data.get("name") or record["subject_id"],
             "observed_at": row["observed_at"], "received_at": row["received_at"], "available_at": row["available_at"],
             "late": row["prior_observation"] is not None and row["observed_at"] < row["prior_observation"],
             "reported_status": status, "data": data, "position": geometry,
-            "evidence": {"locator": record["locator"], "detail_url": url, "original_url": url + "/original",
+            "evidence": {"locator": record["locator"], "detail_url": url, "original_url": original,
                          "parser_version": row["parser_version"]}}
 
 
 def chat_item(exercise_id, row):
     url = f"/exercises/{exercise_id}/live/evidence/{row['id']}"
     return {"key": f"chat-{row['id']}", "source": f"chat:{row['room_key']}", "source_key": row["room_key"],
-            "kind": row["kind"], "external_id": row["subject_id"], "label": row["body"],
+            "kind": row["kind"], "external_id": row["subject_id"], "label": row["body"], "record_id": row["message_id"],
             "observed_at": row["observed_at"], "received_at": row["received_at"], "available_at": row["available_at"],
             "late": row["late"], "reported_status": row["reported_status"], "position": None,
-            "data": {"sender": row["sender"], "message_id": row["message_id"], "version": row["version"]},
+            "data": {"sender": row["sender"], "message_id": row["message_id"], "version": row["version"],
+                     "medium": "chat", "text": row["body"]},
             "evidence": {"locator": {"kind": "message", "value": row["message_id"], "version": row["version"]},
                          "detail_url": url, "original_url": url + "/original"}}
 
@@ -148,11 +155,34 @@ def attach_conflicts(items: list[dict]) -> None:
     groups = defaultdict(list)
     for item in items:
         item["conflicts"] = []
-        if item["entity"] and item["observed_at"] and item["reported_status"] in {"in_service", "out_of_service"}:
+        if (item["entity"] and item["observed_at"] and item["kind"] != "correction"
+                and item["reported_status"] in {"in_service", "out_of_service"}):
             groups[item["entity"]["id"], item["observed_at"]].append(item)
     for group in groups.values():
         for item in group:
             item["conflicts"] = [peer["key"] for peer in group if peer["reported_status"] != item["reported_status"]]
+
+
+def attach_candidate_links(items: list[dict]) -> None:
+    events = []
+    for ordinal, item in enumerate(reversed(items)):
+        item["candidate_targets"] = []
+        if not item["data"].get("medium") or item["observed_at"] is None:
+            continue
+        if item["identity"] == "ambiguous":
+            continue
+        entity = item["entity"]
+        events.append({
+            "id": item["key"], "source_file_id": item["source"], "ordinal": ordinal, "kind": item["kind"],
+            "state": "proposed", "subject_id": entity["id"] if entity else item["external_id"],
+            "capture_offset_ms": round(item["observed_at"].timestamp() * 1000), "body": item["label"],
+            "reported_status": item["reported_status"], "reported_time_seconds": item["data"].get("reported_time_seconds"),
+        })
+    event_map = {event["id"]: event for event in events}
+    for item in items:
+        event = event_map.get(item["key"])
+        if event and event["kind"] in {"correction", "acknowledgment"}:
+            item["candidate_targets"] = link_candidates(event, link_options(event, events))
 
 
 def source_keys(sources: frozenset[str] | None, namespace: str) -> list[str] | None:
@@ -182,6 +212,7 @@ def view(exercise_id: str, filters: HistoryFilters, sources: frozenset[str] | No
     items = items[:DISPLAY_LIMIT]
     attach_identities(items, registry)
     attach_conflicts(items)
+    attach_candidate_links(items)
     return {"exercise": exercise, "as_of": as_of, "known_at": known_at, "truncated": truncated,
             "untimed_excluded": chat[0]["untimed_count"] if chat and as_of is not None else 0,
             "registry": {"version": registry_row["version"], "reviewed_at": registry_row["reviewed_at"],

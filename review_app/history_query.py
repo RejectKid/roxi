@@ -10,9 +10,10 @@ from datetime import UTC, datetime
 from . import history_models as model
 from . import pilot_access as access
 from . import query_service as query
+from .channel_capture import ChannelMessage, CompletedClip, wave_input
 from .history_registry import HistoryError, Registry
 from .history_view import HistoryFilters, source_keys, view
-from .source_catalog import read_bounded
+from .source_catalog import CatalogError, read_bounded
 from .storage import archive_path, connect_read
 
 STATUS = {"in_service": "in service", "out_of_service": "out of service", "unknown": "status unknown"}
@@ -31,8 +32,7 @@ def pinned_view(request: model.HistoryPin, sources: frozenset[str] | None) -> di
 
 
 def observation_identity(row: dict) -> tuple:
-    return (row["source"], row["data"].get("message_id", row["external_id"]),
-            None if row["source"].startswith("chat:") else row["observed_at"])
+    return (row["source"], row["record_id"], None if row["data"].get("medium") == "chat" else row["observed_at"])
 
 
 def subject(row: dict) -> str:
@@ -42,7 +42,9 @@ def subject(row: dict) -> str:
 
 def summary(row: dict) -> str:
     name = subject(row)
-    if row["reported_status"] in STATUS:
+    if row["kind"] == "vehicle_observation":
+        text = f"{row['source_key']} observed {name} with telemetry status {row['data']['status']}."
+    elif row["reported_status"] in STATUS:
         text = f"{row['source_key']} reported {name} {STATUS[row['reported_status']]}."
     else:
         text = f"{row['source_key']} recorded a {row['kind'].replace('_', ' ')} for {name}."
@@ -57,7 +59,7 @@ def config_at(conn, request: model.HistoryPin, sources: frozenset[str] | None) -
     return conn.execute(
         """
         SELECT source.source_key, source.label, source.stale_after_seconds, source.expected_ids,
-               attempt.failure, derived.state
+               attempt.failure, derived.state, pending.count AS pending_audio
         FROM catalog_source AS source
         LEFT JOIN LATERAL (
             SELECT capture_id, failure FROM catalog_attempt
@@ -68,11 +70,21 @@ def config_at(conn, request: model.HistoryPin, sources: frozenset[str] | None) -
             SELECT state FROM catalog_derivation WHERE capture_id = attempt.capture_id AND derived_at <= %(known)s
             ORDER BY parser_version DESC LIMIT 1
         ) AS derived ON true
+        LEFT JOIN LATERAL (
+            SELECT count(*) FROM channel_capture item
+            JOIN catalog_capture capture ON capture.id = item.capture_id
+            WHERE item.exercise_id = source.exercise_id AND item.source_key = source.source_key
+              AND item.audio_digest IS NOT NULL AND capture.captured_at <= %(known)s
+              AND (%(cutoff)s::timestamptz IS NULL OR item.observed_at <= %(cutoff)s)
+              AND NOT EXISTS (SELECT 1 FROM catalog_derivation d
+                              WHERE d.capture_id = item.capture_id AND d.derived_at <= %(known)s)
+        ) AS pending ON source.adapter_key = 'completed-radio'
         WHERE source.exercise_id = %(exercise)s AND source.registered_at <= %(known)s
           AND (%(allowed)s::text[] IS NULL OR source.source_key = ANY(%(allowed)s))
         ORDER BY source.source_key
         """,
-        {"exercise": request.exercise_id, "known": request.known_at, "allowed": source_keys(sources, "catalog")},
+        {"exercise": request.exercise_id, "known": request.known_at, "cutoff": request.as_of,
+         "allowed": source_keys(sources, "catalog")},
     ).fetchall()
 
 
@@ -90,6 +102,8 @@ def source_groups(snapshot: dict, configs: list[dict]) -> tuple[dict, list[str]]
             missing = sorted(set(config["expected_ids"]) - {row["external_id"] for row in rows})
             if missing:
                 gaps.append(f"{config['label']} is missing expected IDs {', '.join(missing)}.")
+        if config["pending_audio"]:
+            gaps.append(f"{config['label']} has {config['pending_audio']} clip(s) awaiting transcription at this cutoff.")
         if config["failure"]:
             gaps.append(f"{config['label']} had an unavailable fetch at this cutoff.")
         elif config["state"] in {"partial", "quarantined"}:
@@ -149,6 +163,7 @@ class Originals:
 
     def read(self, request: model.HistoryPin, row: dict) -> model.OpenHistoryEvidence:
         locator = row["evidence"]["locator"]
+        envelope_sha256 = None
         if row["source"].startswith("chat:"):
             source = self.conn.execute(
                 "SELECT original FROM live_chat_version WHERE id = %s AND exercise_id = %s",
@@ -162,14 +177,47 @@ class Originals:
             capture_id = int(row["key"].split("-")[1])
             payload, digest = self.capture(request.exercise_id, row["source_key"], capture_id)
         try:
-            excerpt = original_record(payload, locator)
-            if not record_matches(row, excerpt):
-                raise ValueError("Original record does not match its locator.")
+            if locator["kind"] == "audio_interval":
+                envelope_sha256 = digest
+                excerpt, digest = self.radio_record(request, row, capture_id, payload)
+            else:
+                is_channel_chat = row["source"].startswith("catalog:") and row["data"].get("medium") == "chat"
+                excerpt = original_record(payload, locator, channel_chat=is_channel_chat)
+                if not record_matches(row, excerpt):
+                    raise ValueError("Original record does not match its locator.")
+                if is_channel_chat:
+                    message = ChannelMessage.model_validate(excerpt)
+                    if (message.sender, message.observed_at) != (row["data"]["sender"], row["observed_at"]):
+                        raise ValueError("Original message metadata does not match.")
         except (ValueError, LookupError, TypeError, csv.Error, RecursionError):
             raise query.QueryError(410, "source_unavailable", "The archived source no longer resolves to this record.") from None
         return model.OpenHistoryEvidence(exercise_id=request.exercise_id, as_of=request.as_of, known_at=request.known_at,
                                          key=row["key"], source=row["source"], sha256=digest,
-                                         original_record=excerpt, identity=self.identity(row), **row["evidence"])
+                                         original_record=excerpt, identity=self.identity(row),
+                                         envelope_sha256=envelope_sha256, **row["evidence"])
+
+    def radio_record(self, request, row, capture_id, payload):
+        clip = CompletedClip.model_validate_json(payload)
+        locator = row["evidence"]["locator"]
+        source = self.conn.execute(
+            "SELECT audio_digest, duration_ms FROM channel_capture "
+            "WHERE exercise_id = %s AND source_key = %s AND capture_id = %s",
+            (request.exercise_id, row["source_key"], capture_id),
+        ).fetchone()
+        if not source or not source["audio_digest"]:
+            raise ValueError("The original clip reference is absent.")
+        raw = verified_payload(source["audio_digest"])
+        try:
+            original, duration = wave_input(clip.wav_base64)
+        except CatalogError as error:
+            raise ValueError("The original clip envelope is invalid.") from error
+        if (original != raw or duration != source["duration_ms"] or clip.clip_id != row["data"]["clip_id"]
+                or clip.sender != row["data"]["sender"] or clip.observed_at.isoformat() != row["data"]["clip_started_at"]
+                or not 0 <= locator["start_ms"] < locator["end_ms"] <= duration
+                or int(round((row["observed_at"] - clip.observed_at).total_seconds() * 1000)) != locator["start_ms"]):
+            raise ValueError("The audio interval did not match its original clip.")
+        return {"clip_id": clip.clip_id, "sender": clip.sender, "clip_started_at": clip.observed_at.isoformat(),
+                "generated_transcript": row["label"], "duration_ms": duration}, source["audio_digest"]
 
     def capture(self, exercise: str, source_key: str, capture_id: int) -> tuple[bytes, str]:
         if capture_id not in self.captures:
@@ -201,7 +249,7 @@ def finite_number(value: str) -> float:
     return number
 
 
-def original_record(payload: bytes, locator: dict) -> dict:
+def original_record(payload: bytes, locator: dict, *, channel_chat: bool = False) -> dict:
     if locator["kind"] == "csv_row":
         reader = csv.reader(io.StringIO(payload.decode("utf-8-sig"), newline=""), strict=True)
         header = next(reader, [])
@@ -214,7 +262,7 @@ def original_record(payload: bytes, locator: dict) -> dict:
                 return dict(zip(header, row, strict=True))
         raise ValueError("CSV record missing.")
     document = json.loads(payload, parse_constant=finite_number, parse_float=finite_number)
-    if locator["kind"] == "json_pointer":
+    if locator["kind"] == "json_pointer" and not (channel_chat and locator["value"] == ""):
         pointer = re.fullmatch(r"/(vehicles|features)/([0-9]+)", locator["value"])
         if pointer is None:
             raise ValueError("Unknown observation pointer.")
@@ -255,6 +303,23 @@ def open_evidence(request: model.EvidenceRequest) -> model.OpenHistoryEvidence:
 
 def pin_from(request: model.HistoryQuery) -> model.HistoryPin:
     return model.HistoryPin(exercise_id=request.exercise_id, as_of=request.as_of, known_at=request.known_at)
+
+
+def history_record(row: dict) -> model.HistoryRecord:
+    data = row["data"]
+    medium = data.get("medium")
+    entity = row["entity"]
+    return model.HistoryRecord(
+        key=row["key"], source=row["source"], record_id=row["record_id"], kind=row["kind"],
+        state="proposed" if medium else "observation", observed_at=row["observed_at"],
+        received_at=row["received_at"], available_at=row["available_at"], late=row["late"], text=data.get("text"),
+        medium=medium, sender=data.get("sender"), input_version=data.get("version"),
+        reported_status=row["reported_status"] if medium else None,
+        reported_time_seconds=data.get("reported_time_seconds"), telemetry_status=data.get("status"),
+        position=row["position"], external_id=row["external_id"], entity_id=entity["id"] if entity else None,
+        identity_status=row["identity"], candidate_entity_ids=[item["id"] for item in row["candidates"]],
+        candidate_target_keys=row["candidate_targets"],
+    )
 
 
 def candidates(request: model.HistoryQuery, pin: model.HistoryPin, rows: list[dict], groups: dict,
@@ -321,7 +386,8 @@ def query_history(request: model.HistoryQuery) -> model.HistoryResult:
                 gaps.append(error.message)
                 continue
             facts.append(model.HistoryFact(kind=kind, subject=subject(row), observed_at=row["observed_at"],
-                                           text=text, citations=citations))
+                                           text=text, citations=citations,
+                                           records=[history_record(record) for _, record in refs]))
     next_offset = offset + request.limit
     cursor = query.encode_cursor(fingerprint, (False, next_offset, 0, 0)) if next_offset < len(items) else None
     return model.HistoryResult(**pin.model_dump(), mode=request.mode, baseline_known_at=request.baseline_known_at,

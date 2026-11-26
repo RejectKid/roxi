@@ -4,7 +4,7 @@ from typing import Annotated, Any, Literal
 from pydantic import AwareDatetime, Field, StringConstraints, field_validator, model_validator
 
 from .chat_types import Question
-from .query_models import Cursor, Input, Slug
+from .query_models import Cursor, Input, ReportedStatus, Slug
 
 Mode = Literal["snapshot", "changes", "conflicts", "overdue"]
 ObservationKey = Annotated[str, StringConstraints(pattern=r"^(chat-[1-9][0-9]*|capture-[1-9][0-9]*-[1-9][0-9]*-[1-9][0-9]*)$", max_length=80)]
@@ -52,6 +52,13 @@ class HistoryLocator(Input):
     version: int | None = None
 
 
+class AudioInterval(Input):
+    kind: Literal["audio_interval"]
+    value: str
+    start_ms: Annotated[int, Field(ge=0)]
+    end_ms: Annotated[int, Field(gt=0)]
+
+
 class ReviewedIdentity(Input):
     entity_id: Slug
     label: str
@@ -64,16 +71,42 @@ class ReviewedIdentity(Input):
 class HistoryCitation(HistoryPin):
     key: ObservationKey
     source: str
-    locator: HistoryLocator
+    locator: Annotated[HistoryLocator | AudioInterval, Field(discriminator="kind")]
     detail_url: str
     original_url: str
     parser_version: int | None = None
     sha256: str
     identity: ReviewedIdentity | None = None
+    envelope_sha256: str | None = None
 
 
 class OpenHistoryEvidence(HistoryCitation):
     original_record: dict[str, Any]
+
+
+class HistoryRecord(Input):
+    key: ObservationKey
+    source: str
+    record_id: str
+    kind: str
+    state: Literal["observation", "proposed"]
+    observed_at: datetime | None
+    received_at: datetime
+    available_at: datetime
+    late: bool
+    text: str | None = None
+    medium: Literal["chat", "radio"] | None = None
+    sender: str | None = None
+    input_version: int | None = None
+    reported_status: ReportedStatus | None = None
+    reported_time_seconds: int | None = None
+    telemetry_status: str | None = None
+    position: tuple[float, float] | None = None
+    external_id: str | None
+    entity_id: Slug | None
+    identity_status: Literal["matched", "ambiguous", "unresolved"]
+    candidate_entity_ids: list[Slug]
+    candidate_target_keys: list[ObservationKey]
 
 
 class HistoryFact(Input):
@@ -82,6 +115,7 @@ class HistoryFact(Input):
     observed_at: datetime | None = None
     text: str
     citations: list[HistoryCitation]
+    records: list[HistoryRecord]
 
 
 class HistoryResult(HistoryPin):

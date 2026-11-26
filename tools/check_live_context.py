@@ -1,6 +1,7 @@
 """Replay concurrent civilian channels against actual PostgreSQL and loopback HTTP."""
 
 import base64
+import hashlib
 import io
 import json
 import os
@@ -34,6 +35,7 @@ def silence(length_ms):
 
 
 def input_bundle(folder, events):
+    from review_app.history_registry import load_registry
     from review_app.importer import import_exercise
     from review_app.source_catalog import ingest_file, register
     from review_app.storage import migrate
@@ -57,6 +59,17 @@ def input_bundle(folder, events):
     assert register(EXERCISE, catalog) == 7
     for key, file in (("assets", "assets.csv"), ("sites", "sites.csv"), ("fleet", "fleet-on-time.json")):
         assert ingest_file(EXERCISE, key, HISTORY / file).state == "accepted"
+    registry = json.loads((HISTORY / "registry-v1.json").read_bytes())
+    registry["entities"].append({"id": "returns-cage", "label": "Returns Cage 1", "kind": "site"})
+    registry["aliases"].extend(
+        {"source": f"catalog:{source}", "external_id": "returns-cage-1", "entities": ["returns-cage"]}
+        for source in ("yard-radio", "receiving")
+    )
+    registry["aliases"].append({"source": "catalog:receiving", "external_id": "yard-runner",
+                                "entities": ["west-annex-van", "yard-cart"]})
+    registry_path = folder / "registry.json"
+    registry_path.write_bytes(encoded(registry))
+    load_registry(EXERCISE, registry_path)
 
 
 def credentials():
@@ -91,6 +104,58 @@ def fixture_transcript(text):
     return f"WEBVTT\n\nF1\n00:00:00.000 --> 00:00:01.800\n{text}\n"
 
 
+def history_checks(base, reader, key, pending, baseline, now, radio):
+    def pin(at):
+        return {"exercise_id": EXERCISE, "known_at": at.isoformat(), "as_of": "2026-11-22T15:30:00Z"}
+
+    def snapshot(at, **filters):
+        return result(base, "/v1/history/query", token=reader, params={**pin(at), **filters})
+
+    before = snapshot(pending)
+    assert sum("awaiting transcription" in gap for gap in before["gaps"]) == key["pending_audio"]
+    final = snapshot(now)
+    assert any(key["outage_source"] in gap and "unavailable" in gap for gap in final["gaps"])
+    records = {record["key"]: record for fact in final["facts"] for record in fact["records"]}
+    assert {record["source"] for record in records.values()} == {
+        "catalog:" + source for source in ("assets", "sites", "fleet", "dispatch", "receiving", "yard-radio", "facilities-radio")
+    }
+
+    correction = next(row for row in records.values() if row["kind"] == "correction")
+    target = next(row for row in records.values() if row["source"] == "catalog:" + key["correction"]["original"]["source"])
+    assert target["key"] in correction["candidate_target_keys"] and correction["state"] == "proposed"
+    assert correction["external_id"] == "bay-2"
+    ack = next(row for row in records.values() if row["kind"] == "acknowledgment")
+    assert ack["input_version"] == 3 and ack["reported_status"] is None
+    assert ack["sender"] == key["acknowledgment"]["sender"] and ack["candidate_target_keys"] == [correction["key"]]
+    uncertain = [row for row in records.values() if row["identity_status"] == "ambiguous"]
+    assert uncertain and any(row["late"] for row in uncertain)
+    assert all(row["entity_id"] is None and row["candidate_entity_ids"] == key["ambiguous_alias"]["candidate_ids"]
+               for row in uncertain)
+    changes = snapshot(now, mode="changes", baseline_known_at=baseline.isoformat())
+    edit = next(fact for fact in changes["facts"] if fact["kind"] == "updated" and fact["records"][-1]["key"] == ack["key"])
+    assert [row["input_version"] for row in edit["records"]] == [1, 3]
+    conflicts = snapshot(now, mode="conflicts")
+    assert len(conflicts["facts"]) == 1
+    conflict = conflicts["facts"][0]
+    assert conflict["subject"] == key["conflict"]["subject"]
+    assert {row["reported_status"] for row in conflict["records"]} == set(key["conflict"]["statuses"])
+
+    citations = [cite for fact in final["facts"] for cite in fact["citations"]]
+    opened = []
+    for citation in citations:
+        params = {field: citation[field] for field in ("exercise_id", "known_at", "as_of", "key")}
+        evidence = result(base, "/v1/history/evidence", token=reader, params=params)
+        assert hashlib.sha256(http(base, evidence["original_url"], token=reader)).hexdigest() == citation["sha256"]
+        if citation["locator"]["kind"] == "audio_interval":
+            locator = evidence["locator"]
+            assert [locator["start_ms"], locator["end_ms"]] == key["radio_interval_ms"]
+            assert locator["value"] == key["correction"]["original"]["cue"]
+            assert evidence["original_record"]["generated_transcript"] == records[citation["key"]]["text"]
+            opened.append(citation)
+    assert {cite["sha256"] for cite in opened} == {hashlib.sha256(clip).hexdigest() for clip in radio}
+    return final, len(citations)
+
+
 def check(folder):
     os.environ["EXERCISE_REVIEW_ARCHIVE"] = str(folder / "archive")
     sys.path.insert(0, str(ROOT))
@@ -111,6 +176,7 @@ def check(folder):
         receipts = [post(base, ingestor, event["source"], envelope(event, clip))
                     for event, clip in zip(events, radio + [None] * (len(events) - len(radio)), strict=True)]
         assert [row["state"] for row in receipts].count("pending") == key["pending_audio"]
+        pending = datetime.now(UTC)
         idem = post(base, ingestor, events[2]["source"], envelope(events[2]), expected=200)
         assert idem["duplicate"] and idem["capture_id"] == receipts[2]["capture_id"]
         assert receipts[2]["capture_id"] != receipts[3]["capture_id"]
@@ -167,9 +233,11 @@ def check(folder):
         assert not any("out of service today" in path.read_text() for path in current.glob("chat-*.irc"))
         mapping = json.loads((current / "source-map.json").read_bytes())
         assert len(mapping["sources"]) == len(events) + 1 and not mapping["excluded_capture_ids"]
+        _, evidence_checks = history_checks(base, reader, key, pending, baseline, now, radio)
 
     return {"channels": 4, "catalog_feeds": 3, "audio_byte_checks": 4, "worker_recovered": True,
-            "late_edit_used_highest_version": True, "exported_sources": mapping["sources"]}
+            "late_edit_used_highest_version": True, "checked_history_citations": evidence_checks,
+            "exported_sources": len(mapping["sources"])}
 
 
 if __name__ == "__main__":

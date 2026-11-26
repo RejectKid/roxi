@@ -106,7 +106,8 @@ def select_channel(conn, exercise_id: str, source_key: str, capture_id: int) -> 
 
 def speech_record(extractor: Extractor, key, kind, observed_at, sender, text, locator, **timeline) -> Record:
     proposal = extractor.extract(text) or Proposal("chatter", None, None)
-    data = {"sender": sender, "text": text, "medium": kind, "reported_status": proposal.reported_status, **timeline}
+    data = {"sender": sender, "text": text, "medium": kind, "reported_status": proposal.reported_status,
+            "reported_time_seconds": proposal.reported_time_seconds, **timeline}
     return Record(key, proposal.subject_id, proposal.kind, observed_at, data, locator)
 
 

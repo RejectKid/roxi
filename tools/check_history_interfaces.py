@@ -146,7 +146,10 @@ def check(folder: Path) -> dict:
             time = conn.execute("SELECT classified_at FROM live_chat_version WHERE id = %s", (receipt_id,)).fetchone()
         answer = post(base, f"/exercises/{EXERCISE}/history/answer",
                       {"known_at": time["classified_at"].isoformat(), "as_of": pin["as_of"], "question": "What was recorded?"})
-        assert "ZEBRA-ONLY" not in json.dumps(answer)
+        assert "ZEBRA-ONLY" not in answer["answer"]
+        assert all("ZEBRA-ONLY" not in fact["text"] for fact in answer["result"]["facts"])
+        assert any(record["text"] == message["text"] for fact in answer["result"]["facts"]
+                   for record in fact["records"])
         assert any(f"chat-{receipt_id}" == cite["key"] for fact in answer["result"]["facts"] for cite in fact["citations"])
 
         request = {**pin, "mode": "conflicts"}
