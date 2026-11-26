@@ -60,6 +60,11 @@ TOOLS = {
         "Verify the exact original record for a history citation using its exercise_id, known_at, as_of, and key.",
         history_models.EvidenceRequest, history_models.OpenHistoryEvidence, history_query.open_evidence,
     ),
+    "answer_history": ToolSpec(
+        "Answer a question about recorded civilian history with pinned cutoffs and structured evidence. "
+        "Supports recorded observations, changes, conflicting reports, and overdue sources.",
+        history_models.HistoryAnswerRequest, history_models.HistoryAnswer, history_query.answer_history,
+    ),
     "list_history_changes": ToolSpec(
         "Read committed history change IDs. Resume with the after token from the previous page.",
         history_models.ChangeRequest, history_models.ChangePage, list_changes,

@@ -17,6 +17,14 @@ from .storage import archive_path
 
 router = APIRouter(prefix="/v1/exercises/{exercise_id}/channels", tags=["Civilian communications"])
 CaptureId = Annotated[int, Field(gt=0, le=2**63 - 1)]
+CAPTURE_BODY = {
+    "requestBody": {
+        "required": True,
+        "content": {"application/json": {"schema": {
+            "oneOf": [channel.ChannelMessage.model_json_schema(), channel.CompletedClip.model_json_schema()],
+        }}},
+    },
+}
 
 
 def capture_detail(exercise_id: str, source_key: str, capture_id: int) -> dict:
@@ -28,7 +36,8 @@ def capture_detail(exercise_id: str, source_key: str, capture_id: int) -> dict:
 
 
 @router.post("/{source_key}/captures", status_code=202, response_model=channel.ChannelReceipt,
-             responses={200: {"description": "The same event version was already received"}})
+             responses={200: {"model": channel.ChannelReceipt, "description": "That event version was already received"}},
+             openapi_extra=CAPTURE_BODY)
 async def ingest_capture(request: Request, exercise_id: Slug, source_key: Slug):
     """Save a versioned channel message or completed radio clip via an ingestion token."""
     require_local_json(request)

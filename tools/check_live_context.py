@@ -1,5 +1,6 @@
 """Replay concurrent civilian channels against actual PostgreSQL and loopback HTTP."""
 
+import asyncio
 import base64
 import hashlib
 import io
@@ -13,13 +14,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from check_pilot_operations import http, result
+from mcp import Client
+
+from check_pilot_operations import http, mcp_server, result
 from smoke_demo import DATABASE_SETTINGS, ROOT, local_server
 
 EXERCISE = "live-context-ci"
 FIXTURE = ROOT / "fixtures" / "live-context"
 HISTORY = ROOT / "fixtures" / "history"
 WORKSPACE = "live-context"
+REVIEW = "live-context-review"
 
 
 def encoded(value):
@@ -100,6 +104,11 @@ def post(base, ingestor, source, data, expected=202):
                   headers={"Content-Type": "application/json"}, data=encoded(data), expected=expected)
 
 
+def post_json(base, path, credential, data, expected=200):
+    return result(base, path, token=credential, headers={"Content-Type": "application/json"},
+                  data=encoded(data), expected=expected)
+
+
 def fixture_transcript(text):
     return f"WEBVTT\n\nF1\n00:00:00.000 --> 00:00:01.800\n{text}\n"
 
@@ -154,6 +163,85 @@ def history_checks(base, reader, key, pending, baseline, now, radio):
             opened.append(citation)
     assert {cite["sha256"] for cite in opened} == {hashlib.sha256(clip).hexdigest() for clip in radio}
     return final, len(citations)
+
+
+async def agent_access(base, snapshot):
+    from review_app import pilot_admin as admin
+    from review_app.history_models import EvidenceRequest, HistoryAnswerRequest
+    from roxi_client import RoxiClient
+
+    user = "context.agent"
+    admin.set_password(user, secrets.token_urlsafe(24))
+    admin.member(WORKSPACE, user, "reader")
+    for source in ("catalog:yard-radio", "catalog:receiving", "history:registry"):
+        admin.grant_source(WORKSPACE, user, EXERCISE, source)
+    token = admin.issue_token(user)
+    pin = {field: snapshot[field] for field in ("exercise_id", "as_of", "known_at")}
+    data = {**pin, "question": "Which reports disagree?"}
+    answer = post_json(base, "/v1/history/answer", token, data)
+    sdk = RoxiClient(base, token=token)
+    assert answer == sdk.answer(HistoryAnswerRequest(**data)).model_dump(mode="json")
+    async with Client(mcp_server(token), read_timeout_seconds=10) as client:
+        assert answer == (await client.call_tool("answer_history", data)).structured_content
+        conflict = answer["result"]["facts"][0]
+        assert {cite["source"] for cite in conflict["citations"]} == {"catalog:yard-radio", "catalog:receiving"}
+        citation = next(cite for cite in conflict["citations"] if cite["locator"]["kind"] == "audio_interval")
+        args = {**pin, "key": citation["key"]}
+        evidence = result(base, "/v1/history/evidence", token=token, params=args)
+        assert evidence == (await client.call_tool("get_history_evidence", args)).structured_content
+        assert evidence == sdk.evidence(EvidenceRequest(**args)).model_dump(mode="json")
+        result(base, "/v1/history/changes", token=token, params={"exercise_id": EXERCISE}, expected=404)
+        admin.revoke_source(WORKSPACE, user, EXERCISE, "catalog:yard-radio")
+        http(base, citation["original_url"], token=token, expected=404)
+        result(base, "/v1/history/evidence", token=token, params=args, expected=404)
+        assert (await client.call_tool("get_history_evidence", args)).is_error
+        assert not post_json(base, "/v1/history/answer", token, data)["result"]["facts"]
+        assert not (await client.call_tool("answer_history", data)).structured_content["result"]["facts"]
+
+
+def check_publication(base, reviewer, radio):
+    from review_app import pilot_admin as admin
+    from review_app.chat_types import ChatRequest
+    from review_app.query_models import ExerciseRequest
+    from review_app.review_store import get_review
+    from roxi_client import RoxiClient
+
+    admin.attach(WORKSPACE, REVIEW)
+    app = f"/exercises/{REVIEW}"
+    api = f"/v1/exercises/{REVIEW}"
+    post_json(base, app + "/review/extract", reviewer, {})
+    review = get_review(REVIEW)
+    version = review["draft"]["version"]
+    targets = {}
+    for row in sorted(review["events"], key=lambda row: row["capture_offset_ms"]):
+        target = targets.get("bay-3") if row["kind"] == "correction" else (
+            targets.get("bay-2") if row["kind"] == "acknowledgment" else None
+        )
+        version = post_json(base, app + f"/review/events/{row['id']}", reviewer, {
+            "version": version, "state": "accepted", "subject_id": row["subject_id"],
+            "reported_status": row["reported_status"], "target_id": target,
+        })["version"]
+        targets[row["subject_id"]] = row["id"]
+    assert post_json(base, app + "/review/publish", reviewer, {"version": version})["number"] == 1
+    params = {"revision_id": 1, "question": "At 02:35, which bay was reported out of service, and what changed?"}
+    ui = post_json(base, app + "/assistant/ask", reviewer, params)
+    published = post_json(base, api + "/answers", reviewer, params)
+    sdk = RoxiClient(base, token=reviewer)
+    exercise = ExerciseRequest(exercise_id=REVIEW)
+    assert sdk.latest_revision(exercise).revision_id == 1
+    assert ui == published == sdk.published_answer(exercise, ChatRequest(**params)).model_dump(mode="json")
+    assert published["verification"]["status"] == "supported"
+    assert published["claim"]["outcome"] == "supported_correction"
+    assert published["claim"]["subject_id"] == "bay-2" and published["claim"]["corrected_subject_id"] == "bay-3"
+    assert len(published["citations"]) == 2
+    for citation in published["citations"]:
+        original = http(base, citation["original_path"], token=reviewer)
+        assert hashlib.sha256(original).hexdigest() == citation["source_sha256"]
+        if citation["source_kind"] == "audio":
+            assert original == radio[0] and citation["locator"]["cue_id"] == "F1"
+        else:
+            assert b"Correction, Bay 2 is out of service." in original
+    return len(published["citations"])
 
 
 def check(folder):
@@ -224,7 +312,7 @@ def check(folder):
         previous = folder / "previous"
         current = folder / "current"
         assert export_channels(EXERCISE, "live-context-review-old", previous, known_at=baseline)["sources"] == 4
-        assert export_channels(EXERCISE, "live-context-review", current, known_at=now)["sources"] == 4
+        assert export_channels(EXERCISE, REVIEW, current, known_at=now)["sources"] == 4
         assert import_exercise(current / "exercise.json").records == len(events) + 1
         assert not any("pending inspection." in line for path in previous.glob("chat-*.irc")
                        for line in path.read_text().splitlines() if "Copy" in line)
@@ -233,10 +321,13 @@ def check(folder):
         assert not any("out of service today" in path.read_text() for path in current.glob("chat-*.irc"))
         mapping = json.loads((current / "source-map.json").read_bytes())
         assert len(mapping["sources"]) == len(events) + 1 and not mapping["excluded_capture_ids"]
-        _, evidence_checks = history_checks(base, reader, key, pending, baseline, now, radio)
+        snapshot, evidence_checks = history_checks(base, reader, key, pending, baseline, now, radio)
+        asyncio.run(agent_access(base, snapshot))
+        published_checks = check_publication(base, reader, radio)
 
     return {"channels": 4, "catalog_feeds": 3, "audio_byte_checks": 4, "worker_recovered": True,
             "late_edit_used_highest_version": True, "checked_history_citations": evidence_checks,
+            "scoped_http_mcp_sdk_match": True, "revocation_checked": True, "checked_published_citations": published_checks,
             "exported_sources": len(mapping["sources"])}
 
 

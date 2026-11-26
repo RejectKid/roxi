@@ -61,6 +61,11 @@ async def parity(base, receipt):
                        if key in {"as_of", "known_at", "baseline_known_at"}}
             ui = post(base, f"/exercises/{EXERCISE}/history/answer",
                       {"question": question, **cutoffs})
+            answer_request = {"exercise_id": EXERCISE, "question": question, **cutoffs}
+            versioned = post(base, "/v1/history/answer", answer_request)
+            agent_answer = await client.call_tool("answer_history", answer_request)
+            assert ui == versioned == agent_answer.structured_content
+            assert versioned == sdk.answer(model.HistoryAnswerRequest(**answer_request)).model_dump(mode="json")
             assert http == mcp.structured_content == ui["result"]
             assert http == sdk.query(model.HistoryQuery(**params)).model_dump(mode="json")
             assert len(http["facts"]) == 1

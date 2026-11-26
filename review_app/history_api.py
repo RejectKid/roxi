@@ -86,6 +86,13 @@ def history_answer(request: Request, exercise_id: Slug, question: model.Question
     return service.answer(exercise_id, question)
 
 
+@router.post("/v1/history/answer", operation_id="answer_history", responses=ERRORS)
+def versioned_history_answer(request: Request, data: model.HistoryAnswerRequest) -> model.HistoryAnswer:
+    """Answer a question about a pinned history and return the supporting structured result."""
+    require_local_json(request)
+    return service.answer_history(data)
+
+
 @router.post("/exercises/{exercise_id}/history/voice")
 async def history_voice(request: Request, exercise_id: Slug) -> model.VoiceTranscript:
     await asyncio.to_thread(access.require, exercise_id, full=False)

@@ -5,6 +5,8 @@ from fastapi.responses import FileResponse
 
 from . import query_models as model
 from . import query_service as service
+from .assistant_routes import ask
+from .chat_types import ChatResponse
 from .importer import Slug
 from .storage import archive_path
 
@@ -20,6 +22,9 @@ REVISION_PATH = "/{exercise_id}/revisions/{revision_id}"
 EVIDENCE_PATH = REVISION_PATH + "/evidence/{evidence_id}"
 
 router = APIRouter(prefix="/v1/exercises", tags=["Published revisions"], responses=ERRORS)
+router.add_api_route("/{exercise_id}/answers", ask, methods=["POST"], response_model=ChatResponse,
+                     operation_id="answer_published_revision",
+                     summary="Answer a question against a published revision and verify its citations")
 
 
 @router.get("/{exercise_id}/revisions/latest", operation_id="get_exercise_revision")

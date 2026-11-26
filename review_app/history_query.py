@@ -406,6 +406,11 @@ def interpret(question: str) -> model.Mode | None:
     return None
 
 
+def answer_history(request: model.HistoryAnswerRequest) -> model.HistoryAnswer:
+    question = model.QuestionRequest.model_validate(request.model_dump(exclude={"exercise_id"}))
+    return answer(request.exercise_id, question)
+
+
 def answer(exercise_id: str, request: model.QuestionRequest) -> model.HistoryAnswer:
     mode = interpret(request.question)
     if mode is None:

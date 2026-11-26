@@ -133,6 +133,10 @@ class QuestionRequest(Input):
     baseline_known_at: AwareDatetime | None = None
 
 
+class HistoryAnswerRequest(QuestionRequest):
+    exercise_id: Slug
+
+
 class HistoryAnswer(Input):
     answer: str
     result: HistoryResult
