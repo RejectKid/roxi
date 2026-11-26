@@ -7,6 +7,7 @@
 - Embed live and reviewed answers through versioned HTTP. Use Python or read-only MCP to query and reopen cited evidence. Reconnect to history changes with a saved cursor.
 - Provision authenticated workspaces with source grants and revocation, connector health, retention, and backup and restore tooling.
 - Replay the fictional multi-channel exercise and run the same HTTP, Python, MCP, and original-evidence contract checks in CI.
+- Run a standalone integration lab that sends microphone, chat, and simulated fleet data and queries Roxi through a companion assistant.
 
 ## v0.1.0
 

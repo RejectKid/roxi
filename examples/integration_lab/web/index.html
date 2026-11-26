@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dockside logistics · Roxi integration lab</title>
+  <link rel="stylesheet" href="/assets/lab.css">
+  <script type="module" src="/assets/lab.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div><a class="brand" href="/">Roxi</a><span class="divider">Integration lab</span></div>
+    <span>Fictional logistics exercise</span>
+  </header>
+  <main>
+    <header class="intro">
+      <div><h1>Dockside logistics</h1><p>Send chat, audio and fleet updates. Query the same data in a separate assistant.</p></div>
+      <a class="companion-link" href="/assistant" target="_blank" rel="noopener">Open assistant tab</a>
+    </header>
+    <div class="workspace">
+      <section class="panel fleet producer" aria-labelledby="fleet-heading">
+        <header>
+          <h2 id="fleet-heading">Fleet tracks</h2>
+          <div class="toolbar">
+            <button id="play" class="outline">Play replay</button>
+            <button id="step" class="outline">Step</button>
+            <output id="phase" aria-live="polite">00 / 04</output>
+          </div>
+        </header>
+        <canvas id="tracks" role="img" aria-label="Local yard grid. No fleet positions received yet."></canvas>
+        <div class="legend"><span class="blue">Blue Van</span><span class="red">Red Van</span><small>West loading → East receiving</small></div>
+      </section>
+
+      <section class="panel ask" aria-labelledby="ask-heading">
+        <header><h2 id="ask-heading">Ask Roxi</h2><span>External companion client</span></header>
+        <div class="examples" aria-label="Example questions">
+          <button type="button">Where are the vans?</button>
+          <button type="button">Which reports disagree?</button>
+          <button type="button">What changed?</button>
+        </div>
+        <form id="question-form">
+          <input id="question" aria-label="Question" maxlength="1000" placeholder="Ask what was recorded">
+          <button class="primary">Ask</button>
+        </form>
+        <div class="answer-section">
+          <h3>Summary</h3>
+          <p id="answer" aria-live="polite">Run the replay or send a message, then ask about the exercise.</p>
+          <details id="gap-box" hidden><summary>Source coverage</summary><ul id="gaps"></ul></details>
+          <h3>Evidence <span id="evidence-count">(0)</span></h3>
+          <ul id="citations" class="citations"></ul>
+        </div>
+      </section>
+
+      <section class="panel capture producer" aria-labelledby="capture-heading">
+        <h2 id="capture-heading">Send to Roxi</h2>
+        <form id="chat-form">
+          <label>Chat channel
+            <select id="crew">
+              <option value="blue">Blue crew</option>
+              <option value="red">Red crew</option>
+            </select>
+          </label>
+          <label>Message
+            <input id="chat" placeholder="Blue Van is in service." maxlength="1000" required>
+          </label>
+          <div class="toolbar capture-actions">
+            <button class="primary" id="send-chat">Send chat</button>
+            <button type="button" id="record">Record mic</button>
+            <button type="button" id="stop" disabled>Stop &amp; send</button>
+          </div>
+        </form>
+        <p class="feedback" id="capture-status" role="status">Radio test phrase: “Blue Van is in service.”</p>
+        <details class="channel-log">
+          <summary>Recent channel messages</summary>
+          <ul id="channel-messages"></ul>
+        </details>
+      </section>
+
+      <section class="panel structured" aria-labelledby="structured-heading">
+        <h2 id="structured-heading">Structured records</h2>
+        <table>
+          <thead><tr><th>Record kind</th><th>Source</th><th>Time</th><th><span class="sr">Raw record</span></th></tr></thead>
+          <tbody id="records"></tbody>
+        </table>
+        <p id="record-empty" class="feedback">Structured records appear after Roxi processes an input.</p>
+      </section>
+    </div>
+    <p id="lab-error" role="status" hidden></p>
+  </main>
+  <dialog id="details" aria-labelledby="detail-title">
+    <div class="detail-top"><h2 id="detail-title">Original evidence</h2><form method="dialog"><button>Close</button></form></div>
+    <div id="detail-content"></div>
+  </dialog>
+</body>
+</html>

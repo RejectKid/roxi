@@ -1,0 +1,92 @@
+* { box-sizing: border-box; }
+:root { color: #111d23; background: #f4f6f2; font: 16px/1.45 "Segoe UI", system-ui, sans-serif;
+  --green: #073a2c; --line: #cdd7d0; --muted: #455851; --white: #fff; }
+body { margin: 0; }
+.top { background: var(--green); color: white; min-height: 55px; display: flex; align-items: center;
+  justify-content: space-between; gap: 18px; padding: 10px clamp(15px, 2vw, 32px); }
+.top > div { display: flex; align-items: center; }
+.brand { color: white; font-size: 24px; font-weight: 750; text-decoration: none; }
+.divider { border-left: 1px solid #b6c9c3; padding-left: 25px; margin-left: 25px; font-size: 21px; }
+main { padding: 24px clamp(14px, 1.5vw, 26px) 35px; max-width: 1700px; margin: auto; }
+.intro { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin: 0 4px 28px; }
+h1, h2, h3, p { margin: 0; }
+h1 { font-size: clamp(30px, 3.5vw, 44px); line-height: 1.13; letter-spacing: -.035em; }
+.intro p { margin-top: 5px; color: #34423f; font-size: clamp(15px, 1.45vw, 20px); }
+.companion-link { color: var(--green); font-weight: 650; white-space: nowrap; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1.30fr) minmax(0, 1fr); gap: 18px; }
+.panel { padding: 16px 20px 18px; min-width: 0; background: var(--white); border: 1px solid var(--line); border-radius: 9px; }
+.panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.panel h2 { font-size: clamp(20px, 1.9vw, 27px); line-height: 1.2; letter-spacing: -.025em; }
+.fleet { background: #092f27; color: #f3faf7; border-color: #092f27; display: flex; flex-direction: column; }
+.toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+#phase { border-left: 1px solid #89a59a; padding-left: 12px; font-variant-numeric: tabular-nums; }
+#tracks { width: 100%; height: clamp(208px, 23vw, 344px); display: block; min-width: 0; flex: 1 0 auto; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 25px; margin: 10px 0 3px; }
+.legend span::before { content: ""; display: inline-block; background: var(--dot); width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+.blue { --dot: #6298ff; } .red { --dot: #fb897b; }
+.legend small { color: #d1e3dd; }
+button, input, select { font: inherit; font-size: .92rem; }
+button, input, select { min-height: 38px; background: #fff; border: 1px solid #aebeb5; border-radius: 6px; color: inherit; }
+button { padding: 5px 13px; cursor: pointer; font-weight: 590; }
+button:hover:not(:disabled) { background: #edf4ef; }
+button:disabled { opacity: .49; cursor: default; }
+button.primary { background: var(--green); color: #fff; border-color: var(--green); }
+button.primary:hover:not(:disabled) { background: #12543f; }
+button.outline { background: transparent; color: #fff; border-color: #a4c4b7; }
+button.outline:hover:not(:disabled) { background: #1f4d3d; }
+input, select { padding: 6px 10px; min-width: 0; }
+:focus-visible { outline: 2px solid #317737; outline-offset: 2px; }
+.fleet :focus-visible { outline-color: #f3faf7; }
+.ask > header { justify-content: start; }
+.ask > header span { color: var(--muted); font-size: .9rem; }
+.examples { display: flex; flex-wrap: wrap; gap: 8px; }
+#question-form { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 13px 0 15px; }
+#question-form button { min-width: 70px; }
+.answer-section { border-top: 1px solid var(--line); padding-top: 11px; overflow-wrap: anywhere; }
+.answer-section h3 { font-size: 1.01rem; margin: 0 0 5px; }
+#answer { margin-bottom: 12px; }
+#gap-box { font-size: .85rem; margin-bottom: 12px; }
+#gap-box ul { padding-left: 20px; margin: 4px 0 0; }
+.citations { padding: 0; margin: 4px 0 0; list-style: none; max-height: 205px; overflow: auto; }
+.citations button { display: flex; justify-content: space-between; align-items: center; text-align: left; gap: 8px; width: 100%; margin-bottom: 5px; }
+.citations small { font-weight: 400; color: var(--muted); }
+.capture h2, .structured h2 { margin-bottom: 13px; }
+#chat-form label { display: grid; grid-template-columns: 130px minmax(0, 1fr); align-items: center; gap: 9px; margin-bottom: 10px; }
+#crew { max-width: 230px; }
+.capture-actions { margin: 15px 0 0; }
+.feedback, .channel-log { font-size: .88rem; color: var(--muted); margin-top: 10px; overflow-wrap: anywhere; }
+.channel-log ul { margin: 6px 0; padding-left: 19px; max-height: 155px; overflow: auto; }
+summary { cursor: pointer; }
+table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+th, td { text-align: left; padding: 6px 7px; }
+thead { background: #eef2ef; }
+tbody tr + tr { border-top: 1px solid #e1e8e2; }
+td:nth-child(2) { overflow-wrap: anywhere; }
+td:last-child { text-align: right; }
+td button { min-height: 31px; font-size: .78rem; padding: 4px 8px; white-space: nowrap; }
+#lab-error { color: #8b2b22; margin: 12px 0; }
+dialog { max-width: min(700px, calc(100vw - 24px)); width: 100%; border: 1px solid var(--line); border-radius: 8px;
+  background: #fff; color: inherit; padding: 16px; }
+dialog::backdrop { background: #1027208c; }
+.detail-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+#detail-content audio { display: block; width: 100%; margin: 8px 0; }
+#detail-content pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .82rem;
+  padding: 10px; background: #f3f7f4; max-height: 400px; }
+.sr { position: absolute; clip: rect(0,0,0,0); width: 1px; height: 1px; overflow: hidden; }
+.assistant-only .producer, .assistant-only .companion-link { display: none; }
+.assistant-only .workspace { grid-template-columns: minmax(0, 1fr); max-width: 850px; margin: auto; }
+@media (max-width: 880px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .capture { grid-row: 2; }
+  .top { align-items: start; }
+}
+@media (max-width: 520px) {
+  .panel { padding: 13px 12px; }
+  .intro { display: block; margin-bottom: 18px; }
+  .companion-link { display: inline-block; margin-top: 7px; }
+  .top { flex-wrap: wrap; gap: 4px; }
+  #chat-form label { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .fleet > header { display: block; }
+  .fleet .toolbar { margin-top: 8px; }
+  .ask > header { flex-wrap: wrap; }
+}

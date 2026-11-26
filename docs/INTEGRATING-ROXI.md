@@ -2,6 +2,8 @@
 
 Run Roxi alongside a facilities, logistics, or exercise-review application. Your backend calls Roxi for structured observations, cited answers, and original evidence. The Roxi web app provides a reference client and a review workflow.
 
+Run the Dockside lab to see these requests from a separate application. It sends live microphone and chat captures, replays two vehicle tracks, and opens answers and evidence in a companion view. [Runnable integration lab](INTEGRATION-LAB.md)
+
 | What you are building | Interface |
 | --- | --- |
 | A chat panel in your app | `POST /v1/history/answer` for live history, or `POST /v1/exercises/{exercise_id}/answers` for a reviewed revision |

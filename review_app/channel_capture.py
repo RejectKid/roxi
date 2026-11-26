@@ -181,7 +181,7 @@ def receive(exercise_id: str, source_key: str, item: ChannelMessage | CompletedC
         return ChannelReceipt(capture_id, saved["state"])
 
 
-def radio_batch(conn, transcribe, *, model_name: str | None = None) -> bool:
+def radio_batch(conn, transcribe, *, model_name: str | None = None, exercise_id: str | None = None) -> bool:
     with conn.transaction():
         conn.execute("SELECT pg_advisory_xact_lock_shared(%s)", (ARCHIVE_LOCK,))
         job = conn.execute(
@@ -189,9 +189,10 @@ def radio_batch(conn, transcribe, *, model_name: str | None = None) -> bool:
             SELECT item.*, exercise.glossary
             FROM channel_capture item JOIN exercise ON exercise.id = item.exercise_id
             WHERE audio_digest IS NOT NULL
+              AND (%s::text IS NULL OR item.exercise_id = %s)
               AND NOT EXISTS (SELECT 1 FROM catalog_derivation d WHERE d.capture_id = item.capture_id)
             ORDER BY item.capture_id LIMIT 1 FOR UPDATE OF item SKIP LOCKED
-            """
+            """, (exercise_id, exercise_id),
         ).fetchone()
         if job is None:
             return False
@@ -235,7 +236,7 @@ def radio_batch(conn, transcribe, *, model_name: str | None = None) -> bool:
         return True
 
 
-def work_radio(model_name: str, *, once: bool = False, offline: bool = False) -> int:
+def work_radio(model_name: str, *, once: bool = False, offline: bool = False, exercise_id: str | None = None) -> int:
     import os
 
     from faster_whisper import WhisperModel
@@ -251,7 +252,7 @@ def work_radio(model_name: str, *, once: bool = False, offline: bool = False) ->
 
     with connect_editor(autocommit=True) as conn:
         while True:
-            processed = radio_batch(conn, transcribe, model_name=model_name)
+            processed = radio_batch(conn, transcribe, model_name=model_name, exercise_id=exercise_id)
             if once:
                 return int(processed)
             if not processed:

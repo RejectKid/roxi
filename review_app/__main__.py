@@ -44,6 +44,8 @@ def main() -> None:
     radio.add_argument("--model", default="small.en")
     radio.add_argument("--once", action="store_true", help="Process at most one queued clip and exit.")
     radio.add_argument("--offline", action="store_true", help="Use only cached model weights.")
+    radio.add_argument("--exercise-id", type=TypeAdapter(Slug).validate_python,
+                       help="Process completed clips for just this exercise.")
     snapshot = commands.add_parser("export-live", help="Freeze live chat for review and publication as a separate exercise.")
     snapshot.add_argument("exercise", type=TypeAdapter(Slug).validate_python)
     snapshot.add_argument("review_exercise", type=TypeAdapter(Slug).validate_python)
@@ -103,7 +105,7 @@ def main() -> None:
                 work()
         elif args.command == "transcribe-live":
             print(json.dumps({"processed": channel_capture.work_radio(
-                args.model, once=args.once, offline=args.offline
+                args.model, once=args.once, offline=args.offline, exercise_id=args.exercise_id
             )}))
         elif args.command == "export-live":
             count = export_snapshot(args.exercise, args.review_exercise, args.output)

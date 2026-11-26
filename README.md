@@ -37,6 +37,7 @@ The default app and database bind to loopback. PostgreSQL persists in the Compos
 
 | What you want to do | Guide |
 | --- | --- |
+| Try a standalone app with live chat, microphone capture, and simulated fleet tracks | [Dockside integration lab](docs/INTEGRATION-LAB.md) |
 | Embed cited answers, connect an agent, or submit chat/radio captures | [Integrate Roxi](docs/INTEGRATING-ROXI.md) |
 | Replay multiple sources and prepare a timed civilian pilot | [Live context replay and pilot](docs/LIVE-CONTEXT-PILOT.md) |
 | Review, publish, and ask about the West Annex drill | [Demo walkthrough](docs/DEMO.md) |
